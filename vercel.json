@@ -1,8 +1,10 @@
 {
   "version": 2,
-  "buildCommand": "bash vercel-build.sh",
   "outputDirectory": "crates/neuropulse-wasm/dist",
   "routes": [
+    {
+      "handle": "filesystem"
+    },
     {
       "src": "/(.*)",
       "dest": "/index.html"
