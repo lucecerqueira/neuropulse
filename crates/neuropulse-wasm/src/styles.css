@@ -1,0 +1,44 @@
+/* Responsividade Mobile-First para o NeuroPulse */
+.filter-accordion {
+  background-color: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+}
+
+.filter-accordion summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #58a6ff;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.filter-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .chart-container {
+    height: 55vh !important;
+    min-height: 300px;
+  }
+  
+  .filter-chips-container {
+    max-height: 80px;
+  }
+  
+  .controls-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
