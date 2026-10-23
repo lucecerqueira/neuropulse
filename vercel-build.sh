@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
 set -e
 
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "$SCRIPT_DIR"
-
-# Instalar Rust caso não esteja no PATH
+# Garantir dependências do Rust
 if ! command -v rustup &> /dev/null; then
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     source $HOME/.cargo/env
 fi
 
-# Garantir o target WebAssembly
 rustup target add wasm32-unknown-unknown
 
-# Baixar o binário pré-compilado do Trunk (evita compilar lightningcss)
+# Baixar o binário pré-compilado do Trunk
 TRUNK_VERSION="v0.21.5"
 if ! command -v trunk &> /dev/null; then
     echo "Baixando binário pré-compilado do Trunk ${TRUNK_VERSION}..."
@@ -23,6 +19,10 @@ if ! command -v trunk &> /dev/null; then
     export PATH="$HOME/.cargo/bin:$PATH"
 fi
 
-# Compilar a aplicação WASM
-cd crates/neuropulse-wasm
+# Se estiver na raiz, navega para a pasta do WASM. Se já estiver nela, permanece.
+if [ -d "crates/neuropulse-wasm" ]; then
+    cd crates/neuropulse-wasm
+fi
+
+# Executa a compilação no diretório atual
 trunk build --release
