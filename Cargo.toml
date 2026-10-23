@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/neuropulse-core",
+    "crates/neuropulse-wasm",
+    "crates/neuropulse-server",
+]

@@ -1,0 +1,1 @@
+leptos::Callback<(f64, std::string::String, std::string::String)>: Into<leptos::Callback<(f64, std::string::String)>>
