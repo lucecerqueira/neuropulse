@@ -120,7 +120,8 @@ pub fn GoNoGoView(
         set_next_trigger.update(|t| *t += 1);
     };
 
-    let handle_action = move |_| {
+    // Função central agnóstica de execução da ação
+    let trigger_action = move || {
         if state.get() == "ready" {
             let now = web_sys::window()
                 .and_then(|w| w.performance())
@@ -170,7 +171,14 @@ pub fn GoNoGoView(
     };
 
     view! {
-        <div class="p-6 space-y-6 bg-[#090d16] min-h-screen text-slate-200 font-mono">
+        <div 
+            on:click=move |_| trigger_action()
+            on:touchstart=move |ev| {
+                ev.prevent_default();
+                trigger_action();
+            }
+            class="p-6 space-y-6 bg-[#090d16] min-h-screen text-slate-200 font-mono select-none touch-manipulation"
+        >
             <div class="bg-[#0f172a]/80 border border-slate-800/80 p-6 rounded-xl flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                 <div>
                     <h1 class="text-xl font-bold text-emerald-400">
@@ -251,26 +259,23 @@ pub fn GoNoGoView(
                                 <div class="flex flex-col items-center space-y-4">
                                     <button
                                         on:click=start_block
-                                        class="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-base rounded-lg shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition cursor-pointer touch-manipulation"
+                                        class="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-base rounded-lg shadow-lg shadow-emerald-500/25 hover:scale-105 active:scale-95 transition cursor-pointer touch-manipulation"
                                     >
                                         "Iniciar Bloco Go/No-Go (" {move || target_repetitions.get()} " Repetições)"
                                     </button>
                                 </div>
                             }.into_view(),
                             "waiting" => view! {
-                                <button
-                                    class="w-full max-w-md h-56 bg-slate-900 border-2 border-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold text-lg select-none cursor-default"
-                                >
+                                <div class="w-full max-w-md h-56 bg-slate-900 border-2 border-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold text-lg select-none">
                                     "Aguardando sinal..."
-                                </button>
+                                </div>
                             }.into_view(),
                             "ready" => view! {
-                                <button
-                                    on:click=handle_action
+                                <div
                                     class=move || format!(
-                                        "w-full max-w-md h-56 rounded-xl flex flex-col items-center justify-center space-y-2 cursor-pointer select-none transition-all border-2 shadow-xl touch-manipulation {}",
+                                        "w-full max-w-md h-56 rounded-xl flex flex-col items-center justify-center space-y-2 cursor-pointer select-none transition-all border-2 shadow-xl {}",
                                         if stimulus_type.get() == "GO" {
-                                            "bg-emerald-500 border-emerald-400 text-slate-950 shadow-emerald-500/20 animate-pulse"
+                                            "bg-emerald-500 border-emerald-400 text-slate-950 shadow-emerald-500/30 animate-pulse"
                                         } else {
                                             "bg-rose-900/80 border-rose-500 text-rose-200 shadow-rose-900/40"
                                         }
@@ -279,7 +284,7 @@ pub fn GoNoGoView(
                                     <span class="text-3xl font-black">
                                         {move || if stimulus_type.get() == "GO" { "CLIQUE AGORA (GO!)" } else { "NÃO CLIQUE! (NO-GO)" }}
                                     </span>
-                                </button>
+                                </div>
                             }.into_view(),
                             "feedback" => view! {
                                 <div class="w-full max-w-md h-56 bg-[#090d16] border border-slate-800 rounded-xl flex flex-col items-center justify-center space-y-2">

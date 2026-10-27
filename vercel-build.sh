@@ -1,28 +1,27 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
 
-# Garantir dependências do Rust
-if ! command -v rustup &> /dev/null; then
+echo "=== A iniciar o build do NeuroPulse para Vercel ==="
+
+# Instalar Rust caso não esteja presente
+if ! command -v rustc &> /dev/null; then
+    echo "A instalar o Rust..."
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    source $HOME/.cargo/env
+    source "$HOME/.cargo/env"
 fi
 
+# Adicionar alvo WebAssembly
 rustup target add wasm32-unknown-unknown
 
-# Baixar o binário pré-compilado do Trunk
-TRUNK_VERSION="v0.21.5"
+# Instalar o Trunk CLI se necessário
 if ! command -v trunk &> /dev/null; then
-    echo "Baixando binário pré-compilado do Trunk ${TRUNK_VERSION}..."
-    mkdir -p $HOME/.cargo/bin
-    curl -sSL "https://github.com/trunk-rs/trunk/releases/download/${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" | tar -xz -C $HOME/.cargo/bin
-    chmod +x $HOME/.cargo/bin/trunk
-    export PATH="$HOME/.cargo/bin:$PATH"
+    echo "A instalar o Trunk..."
+    cargo install trunk --locked
 fi
 
-# Se estiver na raiz, navega para a pasta do WASM. Se já estiver nela, permanece.
-if [ -d "crates/neuropulse-wasm" ]; then
-    cd crates/neuropulse-wasm
-fi
-
-# Executa a compilação no diretório atual
+# Compilar a aplicação usando o Trunk a partir da pasta do crate WASM
+echo "A compilar a aplicação com o Trunk..."
+cd crates/neuropulse-wasm
 trunk build --release
+
+echo "=== Build concluído com sucesso! ==="
