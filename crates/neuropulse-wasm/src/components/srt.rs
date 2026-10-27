@@ -9,7 +9,7 @@ pub fn SrtView(
     #[prop(into, optional)] on_add_trial: Option<Callback<TrialData>>,
 ) -> impl IntoView {
     let (state, set_state) = create_signal("idle");
-    let (selected_trail, set_selected_trail) = create_signal::<String>("Foco Cortical Sustentado".to_string());
+    let (selected_trail, set_selected_trail) = create_signal::<String>("Controle Inibitório".to_string());
     let (reaction_time, set_reaction_time) = create_signal::<Option<f64>>(None);
     let (start_time, set_start_time) = create_signal::<f64>(0.0);
     let (trial_count, set_trial_count) = create_signal::<u32>(0);
@@ -19,6 +19,16 @@ pub fn SrtView(
     let trials_memo_sig = trials.clone();
     let srt_trials = create_memo(move |_| {
         trials_memo_sig.get().into_iter().filter(|t| t.test_type == "SRT").collect::<Vec<_>>()
+    });
+
+    // Identificador único por bloco para forçar uma nova linha dedicada
+    let current_block_id = create_memo(move |_| {
+        let list = srt_trials.get();
+        if list.is_empty() {
+            1
+        } else {
+            list.iter().map(|t| t.trail_number).max().unwrap_or(0) + 1
+        }
     });
 
     let best_time_ms = create_memo(move |_| {
@@ -63,7 +73,7 @@ pub fn SrtView(
         trigger_next_stimulus();
     };
 
-    let handle_click = move |_| {
+    let trigger_action = move || {
         let current_state = state.get();
         if current_state == "ready" {
             let now = web_sys::window()
@@ -84,12 +94,13 @@ pub fn SrtView(
 
             if let Some(cb) = on_add_trial {
                 cb.call(TrialData {
-                    trial_number: next_count,
-                    trail_number: next_count,
+                    trial_number: next_count, // Reseta sempre de 1 ate N no novo bloco
+                    trail_number: current_block_id.get(),
                     test_type: "SRT".to_string(),
                     reaction_time_ms: elapsed,
                     is_correct: true,
-                    stimulus_type: selected_trail.get(),
+                    // Nome exclusivo da série para garantir uma linha independente sobreposta
+                    stimulus_type: format!("{} #{}", selected_trail.get(), current_block_id.get()),
                     timestamp: js_sys::Date::now(),
                 });
             }
@@ -184,6 +195,12 @@ pub fn SrtView(
                 </div>
             </div>
 
+            // CARD DO GRÁFICO NA PARTE SUPERIOR
+            <div class="bg-[#0f172a]/60 border border-slate-800/80 rounded-xl p-6">
+                <ReactionChart trials=trials sessions=sessions test_filter="SRT".to_string() />
+            </div>
+
+            // CARD DO TESTE E MÉTRICAS NA PARTE INFERIOR
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-2 bg-[#0f172a]/60 border border-slate-800/80 rounded-xl p-6 min-h-[420px] flex flex-col justify-between relative">
                     <div class="space-y-2">
@@ -218,7 +235,7 @@ pub fn SrtView(
                             }.into_view(),
                             "waiting" => view! {
                                 <button
-                                    on:click=handle_click
+                                    on:click=move |_| trigger_action()
                                     class="w-full max-w-md h-56 bg-rose-950/60 border-2 border-rose-600/80 rounded-xl flex items-center justify-center text-rose-300 font-bold text-lg cursor-pointer select-none touch-manipulation"
                                 >
                                     "Aguarde o sinal verde..."
@@ -226,7 +243,11 @@ pub fn SrtView(
                             }.into_view(),
                             "ready" => view! {
                                 <button
-                                    on:click=handle_click
+                                    on:click=move |_| trigger_action()
+                                    on:touchstart=move |ev| {
+                                        ev.prevent_default();
+                                        trigger_action();
+                                    }
                                     class="w-full max-w-md h-56 bg-emerald-500 rounded-xl flex items-center justify-center text-slate-950 font-black text-2xl cursor-pointer select-none animate-pulse shadow-xl shadow-emerald-500/20 touch-manipulation border-0"
                                 >
                                     "CLIQUE AGORA!"
@@ -301,10 +322,6 @@ pub fn SrtView(
                         "Trilha selecionada: " <span class="text-slate-300 font-bold">{move || selected_trail.get()}</span>
                     </div>
                 </div>
-            </div>
-
-            <div class="bg-[#0f172a]/60 border border-slate-800/80 rounded-xl p-6">
-                <ReactionChart trials=trials sessions=sessions test_filter="SRT".to_string() />
             </div>
         </div>
     }

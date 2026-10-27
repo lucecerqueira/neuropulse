@@ -11,7 +11,7 @@ pub fn GoNoGoView(
     #[prop(into, optional)] on_add_trial: Option<Callback<TrialData>>,
 ) -> impl IntoView {
     let (state, set_state) = create_signal("idle");
-    let (selected_trail, set_selected_trail) = create_signal::<String>("Foco Cortical Sustentado".to_string());
+    let (selected_trail, set_selected_trail) = create_signal::<String>("Controle Inibitório".to_string());
     let (stimulus_type, set_stimulus_type) = create_signal::<String>("".to_string());
     let (reaction_time, set_reaction_time) = create_signal::<Option<f64>>(None);
     let (start_time, set_start_time) = create_signal::<f64>(0.0);
@@ -22,6 +22,15 @@ pub fn GoNoGoView(
     let trials_memo_sig = trials.clone();
     let gonogo_trials = create_memo(move |_| {
         trials_memo_sig.get().into_iter().filter(|t| t.test_type == "GoNoGo").collect::<Vec<_>>()
+    });
+
+    let current_block_id = create_memo(move |_| {
+        let list = gonogo_trials.get();
+        if list.is_empty() {
+            1
+        } else {
+            list.iter().map(|t| t.trail_number).max().unwrap_or(0) + 1
+        }
     });
 
     let best_time_ms = create_memo(move |_| {
@@ -85,7 +94,7 @@ pub fn GoNoGoView(
                                     if let Some(cb) = on_add_trial {
                                         cb.call(TrialData {
                                             trial_number: next_count,
-                                            trail_number: next_count,
+                                            trail_number: current_block_id.get(),
                                             test_type: "GoNoGo".to_string(),
                                             reaction_time_ms: 0.0,
                                             is_correct: true,
@@ -120,7 +129,6 @@ pub fn GoNoGoView(
         set_next_trigger.update(|t| *t += 1);
     };
 
-    // Função central agnóstica de execução da ação
     let trigger_action = move || {
         if state.get() == "ready" {
             let now = web_sys::window()
@@ -144,7 +152,7 @@ pub fn GoNoGoView(
             if let Some(cb) = on_add_trial {
                 cb.call(TrialData {
                     trial_number: next_count,
-                    trail_number: next_count,
+                    trail_number: current_block_id.get(),
                     test_type: "GoNoGo".to_string(),
                     reaction_time_ms: if is_correct { elapsed } else { 0.0 },
                     is_correct,
@@ -171,14 +179,7 @@ pub fn GoNoGoView(
     };
 
     view! {
-        <div 
-            on:click=move |_| trigger_action()
-            on:touchstart=move |ev| {
-                ev.prevent_default();
-                trigger_action();
-            }
-            class="p-6 space-y-6 bg-[#090d16] min-h-screen text-slate-200 font-mono select-none touch-manipulation"
-        >
+        <div class="p-6 space-y-6 bg-[#090d16] min-h-screen text-slate-200 font-mono select-none touch-manipulation">
             <div class="bg-[#0f172a]/80 border border-slate-800/80 p-6 rounded-xl flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                 <div>
                     <h1 class="text-xl font-bold text-emerald-400">
@@ -234,6 +235,10 @@ pub fn GoNoGoView(
                 </div>
             </div>
 
+            <div class="bg-[#0f172a]/60 border border-slate-800/80 rounded-xl p-6">
+                <ReactionChart trials=trials sessions=sessions test_filter="GoNoGo".to_string() />
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-2 bg-[#0f172a]/60 border border-slate-800/80 rounded-xl p-6 min-h-[420px] flex flex-col justify-between relative">
                     <div class="space-y-2">
@@ -271,9 +276,14 @@ pub fn GoNoGoView(
                                 </div>
                             }.into_view(),
                             "ready" => view! {
-                                <div
+                                <button
+                                    on:click=move |_| trigger_action()
+                                    on:touchstart=move |ev| {
+                                        ev.prevent_default();
+                                        trigger_action();
+                                    }
                                     class=move || format!(
-                                        "w-full max-w-md h-56 rounded-xl flex flex-col items-center justify-center space-y-2 cursor-pointer select-none transition-all border-2 shadow-xl {}",
+                                        "w-full max-w-md h-56 rounded-xl flex flex-col items-center justify-center space-y-2 cursor-pointer select-none transition-all border-2 shadow-xl touch-manipulation {}",
                                         if stimulus_type.get() == "GO" {
                                             "bg-emerald-500 border-emerald-400 text-slate-950 shadow-emerald-500/30 animate-pulse"
                                         } else {
@@ -284,7 +294,7 @@ pub fn GoNoGoView(
                                     <span class="text-3xl font-black">
                                         {move || if stimulus_type.get() == "GO" { "CLIQUE AGORA (GO!)" } else { "NÃO CLIQUE! (NO-GO)" }}
                                     </span>
-                                </div>
+                                </button>
                             }.into_view(),
                             "feedback" => view! {
                                 <div class="w-full max-w-md h-56 bg-[#090d16] border border-slate-800 rounded-xl flex flex-col items-center justify-center space-y-2">
@@ -350,10 +360,6 @@ pub fn GoNoGoView(
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div class="bg-[#0f172a]/60 border border-slate-800/80 rounded-xl p-6">
-                <ReactionChart trials=trials sessions=sessions test_filter="GoNoGo".to_string() />
             </div>
         </div>
     }

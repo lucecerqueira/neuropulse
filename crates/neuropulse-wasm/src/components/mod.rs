@@ -1,7 +1,9 @@
 pub mod chart;
-pub mod srt;
+pub mod longitudinal_chart;
+pub mod analytics_suite;
 pub mod crt;
-pub mod gonogo;
 pub mod dashboard;
+pub mod gonogo;
 pub mod login;
 pub mod plans;
+pub mod srt;

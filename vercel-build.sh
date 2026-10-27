@@ -19,9 +19,16 @@ if ! command -v trunk &> /dev/null; then
     cargo install trunk --locked
 fi
 
-# Compilar a aplicação usando o Trunk a partir da pasta do crate WASM
+# Compilar a aplicação usando o Trunk
 echo "A compilar a aplicação com o Trunk..."
 cd crates/neuropulse-wasm
 trunk build --release
+
+# Forçar a cópia manual dos favicons para a pasta dist compilada
+echo "A copiar favicons para o diretório de distribuição (dist/)..."
+cp ../../favicon.ico dist/ 2>/dev/null || true
+cp ../../favicon.svg dist/ 2>/dev/null || true
+cp favicon.ico dist/ 2>/dev/null || true
+cp favicon.svg dist/ 2>/dev/null || true
 
 echo "=== Build concluído com sucesso! ==="

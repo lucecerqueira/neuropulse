@@ -10,7 +10,7 @@ pub fn CrtView(
 ) -> impl IntoView {
     let (state, set_state) = create_signal("idle");
     let (selected_trail, set_selected_trail) = create_signal::<String>("Foco Cortical Sustentado".to_string());
-    let (current_stimulus, set_current_stimulus) = create_signal::<String>("".to_string());
+    let (stimulus_direction, set_stimulus_direction) = create_signal::<String>("".to_string());
     let (reaction_time, set_reaction_time) = create_signal::<Option<f64>>(None);
     let (start_time, set_start_time) = create_signal::<f64>(0.0);
     let (trial_count, set_trial_count) = create_signal::<u32>(0);
@@ -22,15 +22,25 @@ pub fn CrtView(
         trials_memo_sig.get().into_iter().filter(|t| t.test_type == "CRT").collect::<Vec<_>>()
     });
 
+    let current_block_id = create_memo(move |_| {
+        let list = crt_trials.get();
+        if list.is_empty() {
+            1
+        } else {
+            list.iter().map(|t| t.trail_number).max().unwrap_or(0) + 1
+        }
+    });
+
     let best_time_ms = create_memo(move |_| {
         crt_trials.get()
             .iter()
+            .filter(|t| t.is_correct)
             .map(|t| t.reaction_time_ms)
             .fold(f64::INFINITY, f64::min)
     });
 
     let avg_time_ms = create_memo(move |_| {
-        let list = crt_trials.get();
+        let list: Vec<_> = crt_trials.get().into_iter().filter(|t| t.is_correct).collect();
         if list.is_empty() {
             0.0
         } else {
@@ -57,9 +67,9 @@ pub fn CrtView(
 
         set_timeout(
             move || {
-                let directions = vec!["LEFT", "RIGHT", "UP", "DOWN"];
+                let directions = vec!["UP", "LEFT", "DOWN", "RIGHT"];
                 let idx = (js_sys::Math::random() * 4.0) as usize;
-                set_current_stimulus.set(directions[idx % 4].to_string());
+                set_stimulus_direction.set(directions[idx].to_string());
 
                 let now = web_sys::window()
                     .and_then(|w| w.performance())
@@ -78,7 +88,7 @@ pub fn CrtView(
         trigger_next_stimulus();
     };
 
-    let handle_choice = move |chosen_dir: &'static str| {
+    let handle_direction_choice = move |chosen_dir: &'static str| {
         if state.get() == "ready" {
             let now = web_sys::window()
                 .and_then(|w| w.performance())
@@ -87,7 +97,9 @@ pub fn CrtView(
             let elapsed = now - start_time.get();
             set_reaction_time.set(Some(elapsed));
 
-            let is_correct = current_stimulus.get() == chosen_dir;
+            let current_dir = stimulus_direction.get();
+            let is_correct = chosen_dir == current_dir;
+
             if is_correct {
                 set_correct_count.update(|c| *c += 1);
             }
@@ -98,7 +110,7 @@ pub fn CrtView(
             if let Some(cb) = on_add_trial {
                 cb.call(TrialData {
                     trial_number: next_count,
-                    trail_number: next_count,
+                    trail_number: current_block_id.get(),
                     test_type: "CRT".to_string(),
                     reaction_time_ms: elapsed,
                     is_correct,
@@ -131,10 +143,10 @@ pub fn CrtView(
             <div class="bg-[#0f172a]/80 border border-slate-800/80 p-6 rounded-xl flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                 <div>
                     <h1 class="text-xl font-bold text-amber-400">
-                        "Protocolo CRT (Tempo de Reação de Escolha)"
+                        "Protocolo CRT (Tempo de Reação de Escolha Multidirecional)"
                     </h1>
                     <p class="text-sm text-slate-400 mt-1">
-                        "Avaliação de discriminação cognitiva e tomada de decisão motora direcionada."
+                        "Avaliação de processamento visual-espacial e discriminação motora."
                     </p>
                 </div>
 
@@ -183,6 +195,10 @@ pub fn CrtView(
                 </div>
             </div>
 
+            <div class="bg-[#0f172a]/60 border border-slate-800/80 rounded-xl p-6">
+                <ReactionChart trials=trials sessions=sessions test_filter="CRT".to_string() />
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-2 bg-[#0f172a]/60 border border-slate-800/80 rounded-xl p-6 min-h-[420px] flex flex-col justify-between relative">
                     <div class="space-y-2">
@@ -208,7 +224,7 @@ pub fn CrtView(
                                 <div class="flex flex-col items-center space-y-4">
                                     <button
                                         on:click=start_block
-                                        class="px-8 py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-base rounded-lg shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 transition cursor-pointer"
+                                        class="px-8 py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-base rounded-lg shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 transition cursor-pointer touch-manipulation"
                                     >
                                         "Iniciar Bloco CRT (" {move || target_repetitions.get()} " Repetições)"
                                     </button>
@@ -216,27 +232,47 @@ pub fn CrtView(
                             }.into_view(),
                             "waiting" => view! {
                                 <div class="w-full max-w-md h-56 bg-slate-900 border-2 border-slate-800 rounded-xl flex items-center justify-center text-slate-400 font-bold text-lg select-none">
-                                    "Aguarde o estímulo direcional..."
+                                    "Aguardando sinal direcional..."
                                 </div>
                             }.into_view(),
                             "ready" => view! {
-                                <div class="w-full max-w-md h-56 bg-slate-900 border-2 border-amber-500/80 rounded-xl flex flex-col items-center justify-center space-y-4">
-                                    <div class="text-4xl font-black text-amber-400 animate-pulse">
-                                        {move || match current_stimulus.get().as_str() {
-                                            "LEFT" => "⬅️ ESQUERDA",
-                                            "RIGHT" => "DIREITA ➡️",
-                                            "UP" => "⬆️ CIMA",
-                                            "DOWN" => "⬇️ BAIXO",
+                                <div class="w-full max-w-md space-y-4">
+                                    <div class="h-32 bg-amber-500/20 border-2 border-amber-400 rounded-xl flex items-center justify-center text-amber-300 font-black text-4xl animate-pulse shadow-xl shadow-amber-500/10">
+                                        {move || match stimulus_direction.get().as_str() {
+                                            "UP" => "CIMA (▲)",
+                                            "LEFT" => "ESQUERDA (◄)",
+                                            "DOWN" => "BAIXO (▼)",
+                                            "RIGHT" => "DIREITA (►)",
                                             _ => "",
                                         }}
                                     </div>
-                                    <div class="grid grid-cols-3 gap-2">
+                                    <div class="grid grid-cols-3 gap-2 max-w-xs mx-auto">
                                         <div></div>
-                                        <button on:click=move |_| handle_choice("UP") class="px-3 py-1.5 bg-slate-800 text-xs font-bold rounded hover:bg-amber-500 hover:text-black">"UP"</button>
+                                        <button
+                                            on:click=move |_| handle_direction_choice("UP")
+                                            class="py-3 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 border border-slate-700 text-white font-bold rounded-lg transition active:scale-95 cursor-pointer touch-manipulation"
+                                        >
+                                            "▲"
+                                        </button>
                                         <div></div>
-                                        <button on:click=move |_| handle_choice("LEFT") class="px-3 py-1.5 bg-slate-800 text-xs font-bold rounded hover:bg-amber-500 hover:text-black">"LEFT"</button>
-                                        <button on:click=move |_| handle_choice("DOWN") class="px-3 py-1.5 bg-slate-800 text-xs font-bold rounded hover:bg-amber-500 hover:text-black">"DOWN"</button>
-                                        <button on:click=move |_| handle_choice("RIGHT") class="px-3 py-1.5 bg-slate-800 text-xs font-bold rounded hover:bg-amber-500 hover:text-black">"RIGHT"</button>
+                                        <button
+                                            on:click=move |_| handle_direction_choice("LEFT")
+                                            class="py-3 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 border border-slate-700 text-white font-bold rounded-lg transition active:scale-95 cursor-pointer touch-manipulation"
+                                        >
+                                            "◄"
+                                        </button>
+                                        <button
+                                            on:click=move |_| handle_direction_choice("DOWN")
+                                            class="py-3 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 border border-slate-700 text-white font-bold rounded-lg transition active:scale-95 cursor-pointer touch-manipulation"
+                                        >
+                                            "▼"
+                                        </button>
+                                        <button
+                                            on:click=move |_| handle_direction_choice("RIGHT")
+                                            class="py-3 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 border border-slate-700 text-white font-bold rounded-lg transition active:scale-95 cursor-pointer touch-manipulation"
+                                        >
+                                            "►"
+                                        </button>
                                     </div>
                                 </div>
                             }.into_view(),
@@ -255,12 +291,11 @@ pub fn CrtView(
                                     </span>
                                     <h4 class="text-lg font-bold text-white">"Bloco Concluído!"</h4>
                                     <p class="text-xs text-slate-400">
-                                        "Você realizou " {move || target_repetitions.get()} " repetições com média de "
-                                        <strong class="text-yellow-400">{move || format!("{:.1} ms", avg_time_ms.get())}</strong>
+                                        "Média de reação: " <strong class="text-yellow-400">{move || format!("{:.1} ms", avg_time_ms.get())}</strong>
                                     </p>
                                     <button
                                         on:click=start_block
-                                        class="px-8 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg transition cursor-pointer"
+                                        class="px-8 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg transition cursor-pointer touch-manipulation"
                                     >
                                         "Iniciar Novo Bloco"
                                     </button>
@@ -273,11 +308,11 @@ pub fn CrtView(
 
                 <div class="bg-[#0f172a]/60 border border-slate-800/80 rounded-xl p-6 space-y-4">
                     <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                        "Métricas da Sessão CRT"
+                        "Métricas CRT"
                     </h3>
 
                     <div class="bg-[#090d16] border border-slate-800/80 rounded-lg p-4 space-y-1">
-                        <span class="text-xs text-slate-400">"Menor Tempo (PB):"</span>
+                        <span class="text-xs text-slate-400">"Menor Tempo Correto (PB):"</span>
                         <div class="text-xl font-bold text-emerald-400">
                             {move || {
                                 let val: f64 = best_time_ms.get();
@@ -291,7 +326,7 @@ pub fn CrtView(
                     </div>
 
                     <div class="bg-[#090d16] border border-slate-800/80 rounded-lg p-4 space-y-1">
-                        <span class="text-xs text-slate-400">"Média da Sessão CRT:"</span>
+                        <span class="text-xs text-slate-400">"Média da Sessão:"</span>
                         <div class="text-xl font-bold text-yellow-400">
                             {move || format!("{:.1} ms", avg_time_ms.get())}
                         </div>
@@ -304,10 +339,6 @@ pub fn CrtView(
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div class="bg-[#0f172a]/60 border border-slate-800/80 rounded-xl p-6">
-                <ReactionChart trials=trials sessions=sessions test_filter="CRT".to_string() />
             </div>
         </div>
     }
