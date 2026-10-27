@@ -7,16 +7,49 @@ use crate::components::crt::CrtView;
 use crate::components::gonogo::GoNoGoTest;
 use crate::components::plans::PlansView;
 
+// Função auxiliar para carregar histórico do localStorage de forma segura
+fn load_stored_trials() -> Vec<TrialData> {
+    if let Some(window) = web_sys::window() {
+        if let Ok(js_val) = js_sys::eval("window.localStorage.getItem('neuropulse_trials')") {
+            if let Some(json_str) = js_val.as_string() {
+                if let Ok(data) = serde_json::from_str::<Vec<TrialData>>(&json_str) {
+                    return data;
+                }
+            }
+        }
+    }
+    vec![]
+}
+
+// Função auxiliar para salvar histórico no localStorage de forma segura
+fn save_trials(trials: &[TrialData]) {
+    if let Ok(json_str) = serde_json::to_string(trials) {
+        if let Some(_) = web_sys::window() {
+            let script = format!(
+                "window.localStorage.setItem('neuropulse_trials', {})",
+                js_sys::JSON::stringify(&wasm_bindgen::JsValue::from_str(&json_str))
+                    .unwrap_or_default()
+            );
+            let _ = js_sys::eval(&script);
+        }
+    }
+}
+
 #[component]
 pub fn App() -> impl IntoView {
     let (is_logged, set_is_logged) = create_signal(false);
     let (current_tab, set_current_tab) = create_signal("dashboard".to_string());
 
-    let (trials, set_trials) = create_signal::<Vec<TrialData>>(vec![]);
-    let (sessions, set_sessions) = create_signal::<Vec<SessionRecord>>(vec![]);
+    // Inicializa com os dados persistidos salvos no localStorage
+    let (trials, set_trials) = create_signal::<Vec<TrialData>>(load_stored_trials());
+    let (sessions, _set_sessions) = create_signal::<Vec<SessionRecord>>(vec![]);
 
+    // Callback reativo para adicionar novo treino e persistir imediatamente
     let handle_add_trial = Callback::new(move |new_trial: TrialData| {
-        set_trials.update(|t_list| t_list.push(new_trial));
+        set_trials.update(|t_list| {
+            t_list.push(new_trial);
+            save_trials(t_list);
+        });
     });
 
     let logout = move |_| {
