@@ -16,7 +16,6 @@ pub fn SrtView(
     let (target_repetitions, set_target_repetitions) = create_signal::<u32>(5);
     let (streak, set_streak) = create_signal::<u32>(0);
 
-    // Resolvendo o move de `trials`: clone do signal para uso exclusivo no Memo
     let trials_memo_sig = trials.clone();
     let srt_trials = create_memo(move |_| {
         trials_memo_sig.get().into_iter().filter(|t| t.test_type == "SRT").collect::<Vec<_>>()
@@ -154,7 +153,6 @@ pub fn SrtView(
                                 let option_val = label_text.clone();
                                 let check_val = label_text.clone();
 
-                                // Resolvendo o move de `label_text`: instâncias independentes para atribuição e closure
                                 view! {
                                     <option
                                         value=option_val
@@ -211,7 +209,7 @@ pub fn SrtView(
                                 <div class="flex flex-col items-center space-y-4">
                                     <button
                                         on:click=start_block
-                                        class="px-8 py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-base rounded-lg shadow-lg shadow-cyan-500/20 hover:scale-105 active:scale-95 transition cursor-pointer"
+                                        class="px-8 py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-base rounded-lg shadow-lg shadow-cyan-500/20 hover:scale-105 active:scale-95 transition cursor-pointer touch-manipulation"
                                     >
                                         "Iniciar Bloco SRT (" {move || target_repetitions.get()} " Repetições)"
                                     </button>
@@ -219,20 +217,20 @@ pub fn SrtView(
                                 </div>
                             }.into_view(),
                             "waiting" => view! {
-                                <div
+                                <button
                                     on:click=handle_click
-                                    class="w-full max-w-md h-56 bg-rose-950/60 border-2 border-rose-600/80 rounded-xl flex items-center justify-center text-rose-300 font-bold text-lg cursor-pointer select-none"
+                                    class="w-full max-w-md h-56 bg-rose-950/60 border-2 border-rose-600/80 rounded-xl flex items-center justify-center text-rose-300 font-bold text-lg cursor-pointer select-none touch-manipulation"
                                 >
                                     "Aguarde o sinal verde..."
-                                </div>
+                                </button>
                             }.into_view(),
                             "ready" => view! {
-                                <div
+                                <button
                                     on:click=handle_click
-                                    class="w-full max-w-md h-56 bg-emerald-500 rounded-xl flex items-center justify-center text-slate-950 font-black text-2xl cursor-pointer select-none animate-pulse shadow-xl shadow-emerald-500/20"
+                                    class="w-full max-w-md h-56 bg-emerald-500 rounded-xl flex items-center justify-center text-slate-950 font-black text-2xl cursor-pointer select-none animate-pulse shadow-xl shadow-emerald-500/20 touch-manipulation border-0"
                                 >
                                     "CLIQUE AGORA!"
-                                </div>
+                                </button>
                             }.into_view(),
                             "feedback" => view! {
                                 <div class="w-full max-w-md h-56 bg-[#090d16] border border-slate-800 rounded-xl flex flex-col items-center justify-center space-y-2">
@@ -255,7 +253,7 @@ pub fn SrtView(
                                     </p>
                                     <button
                                         on:click=start_block
-                                        class="px-8 py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-lg transition cursor-pointer"
+                                        class="px-8 py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-lg transition cursor-pointer touch-manipulation"
                                     >
                                         "Iniciar Novo Bloco"
                                     </button>
