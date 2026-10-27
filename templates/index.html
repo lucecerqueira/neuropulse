@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroSync - Dashboard Principal (Rust Engine)</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 0; }
+        
+        .navbar { background-color: #1e293b; border-bottom: 1px solid #334155; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 65px; position: sticky; top: 0; z-index: 1000; }
+        .brand { font-size: 20px; font-weight: 700; color: #38bdf8; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .brand span { color: #94a3b8; font-weight: 300; font-size: 14px; }
+        
+        .nav-links { display: flex; list-style: none; margin: 0; padding: 0; gap: 8px; }
+        .nav-links a { color: #cbd5e1; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .nav-links a:hover { background-color: #334155; color: #38bdf8; }
+        .nav-links a.active { background-color: #0284c7; color: #ffffff; }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 25px 20px; }
+
+        .hero { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 35px; margin-bottom: 30px; text-align: center; }
+        .hero h1 { margin: 0 0 10px 0; color: #38bdf8; font-size: 28px; }
+        .hero p { color: #94a3b8; font-size: 16px; margin: 0 auto; max-width: 700px; }
+
+        .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 15px; }
+        .card-module { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.2s, border-color 0.2s; }
+        .card-module:hover { transform: translateY(-3px); border-color: #38bdf8; }
+        .card-module h3 { margin: 0 0 10px 0; color: #f8fafc; font-size: 16px; }
+        .card-module p { color: #64748b; font-size: 12px; line-height: 1.5; margin-bottom: 20px; }
+        .btn-card { display: inline-block; text-align: center; background-color: #0284c7; color: #fff; text-decoration: none; padding: 10px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; }
+        .btn-card:hover { background-color: #0369a1; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <a href="/" class="brand">NeuroSync <span>| Rust Core Engine</span></a>
+        <ul class="nav-links">
+            <li><a href="/" class="active">🏠 Início</a></li>
+            <li><a href="/tracker/projections/">📐 Análise 3D</a></li>
+            <li><a href="/stroop/">🧠 Stroop</a></li>
+            <li><a href="/gonogo/">🎭 Go/No-Go</a></li>
+            <li><a href="/pasat/">🧮 PASAT</a></li>
+            <li><a href="/reversal/">🔄 Aprendizado Reverso</a></li>
+            <li><a href="/microsaccades/">🔬 Micro-Nistagmo</a></li>
+            <li><a href="/report/">📋 Laudos</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <div class="hero">
+            <h1>Plataforma NeuroSync (Rust Core)</h1>
+            <p>Avaliação Neuro-Oculomotora, Fenotipagem Digital e Análise 3D de Séries Temporais em Alta Velocidade no TimescaleDB.</p>
+        </div>
+
+        <div class="cards-grid">
+            <div class="card-module">
+                <div>
+                    <h3>📐 Análise Angular & 3D</h3>
+                    <p>Rastreamento bi-ocular com cálculo de BCEA, Main Sequence Ratio e Entropia PNE.</p>
+                </div>
+                <a href="/tracker/projections/" class="btn-card">Acessar Análise 3D</a>
+            </div>
+
+            <div class="card-module">
+                <div>
+                    <h3>🧠 Teste de Stroop</h3>
+                    <p>Avaliação neurocognitiva de controle inibitório e tempo de reação (TR em ms).</p>
+                </div>
+                <a href="/stroop/" class="btn-card">Iniciar Stroop Test</a>
+            </div>
+
+            <div class="card-module">
+                <div>
+                    <h3>🎭 Emotional Go/No-Go</h3>
+                    <p>Controle inibitório pré-frontal, tempo de pressão de tecla e FACS facial.</p>
+                </div>
+                <a href="/gonogo/" class="btn-card" style="background-color: #10b981;">Iniciar Go/No-Go</a>
+            </div>
+
+            <div class="card-module">
+                <div>
+                    <h3>🧮 PASAT Digital</h3>
+                    <p>Memória de trabalho, resistência ao estresse por tempo e taxa de piscadas (BRV).</p>
+                </div>
+                <a href="/pasat/" class="btn-card" style="background-color: #f59e0b;">Iniciar PASAT</a>
+            </div>
+
+            <div class="card-module">
+                <div>
+                    <h3>🔄 Aprendizado Reverso</h3>
+                    <p>Plasticidade orbitofrontal, erros perseverativos e vacilação do mouse (Jitter AUC).</p>
+                </div>
+                <a href="/reversal/" class="btn-card" style="background-color: #ec4899;">Iniciar Reversal</a>
+            </div>
+
+            <div class="card-module">
+                <div>
+                    <h3>🔬 Micro-Nistagmo & FEM</h3>
+                    <p>Detecção de microssacadas e estabilidade foveal pelo algoritmo Engbert em Rust.</p>
+                </div>
+                <a href="/microsaccades/" class="btn-card" style="background-color: #a855f7;">Analisar Tremor FEM</a>
+            </div>
+
+            <div class="card-module">
+                <div>
+                    <h3>📋 Laudos & Histórico</h3>
+                    <p>Visualização longitudinal dos exames do paciente e emissão de parecer integrado com data/hora.</p>
+                </div>
+                <a href="/report/" class="btn-card">Ver Laudo Integrado</a>
+            </div>
+        </div>
+    </main>
+
+</body>
+</html>

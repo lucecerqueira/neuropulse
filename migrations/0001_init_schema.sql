@@ -1,34 +1,141 @@
-CREATE TYPE user_role AS ENUM ('admin', 'client', 'clinician');
-CREATE TYPE subscription_tier AS ENUM ('free_guest', 'free_community', 'pro_athlete', 'performance_lab', 'clinical');
+-- 1. Enums
+DO $$ BEGIN CREATE TYPE user_role AS ENUM ('client', 'clinician', 'admin'); EXCEPTION WHEN duplicate_object THEN null; END $$;
+DO $$ BEGIN CREATE TYPE subscription_tier AS ENUM ('free_community', 'pro_clinician', 'enterprise'); EXCEPTION WHEN duplicate_object THEN null; END $$;
 
-CREATE TABLE users (
+-- 2. Tabela de Usuários
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    full_name VARCHAR(255) NOT NULL,
-    role user_role DEFAULT 'client' NOT NULL,
-    tier subscription_tier DEFAULT 'free_community' NOT NULL,
-    stripe_customer_id VARCHAR(255),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    role user_role NOT NULL DEFAULT 'client',
+    tier subscription_tier NOT NULL DEFAULT 'free_community',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE cognitive_sessions (
+-- 3. Tabela de Sessões Cognitivas Gerais
+CREATE TABLE IF NOT EXISTS cognitive_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    level_completed INT CHECK (level_completed BETWEEN 1 AND 5),
-    avg_reaction_time_ms FLOAT NOT NULL,
-    saccadic_latency_ms FLOAT,
-    heart_rate_bpm FLOAT,
-    respiration_rate_bpm FLOAT,
-    hrv_rmssd FLOAT,
-    cns_readiness_score FLOAT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    level_completed INTEGER NOT NULL,
+    avg_reaction_time_ms DOUBLE PRECISION NOT NULL,
+    saccadic_latency_ms DOUBLE PRECISION,
+    saccadic_accuracy_percent DOUBLE PRECISION,
+    heart_rate_bpm INTEGER,
+    respiration_rate_bpm INTEGER,
+    hrv_rmssd DOUBLE PRECISION,
+    cns_readiness_score DOUBLE PRECISION,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE admin_audit_logs (
+-- 4. Pacientes (Neurosync)
+CREATE TABLE IF NOT EXISTS patients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    admin_id UUID REFERENCES users(id),
-    action VARCHAR(255) NOT NULL,
-    target_user_id UUID REFERENCES users(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+    full_name TEXT NOT NULL,
+    medical_record_id TEXT NOT NULL,
+    birth_date DATE NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. Sessões Neurofisiológicas
+CREATE TABLE IF NOT EXISTS assessment_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID REFERENCES patients(id),
+    session_id UUID,
+    bcea_68_score REAL NOT NULL DEFAULT 0.0,
+    main_sequence_ratio_avg REAL NOT NULL DEFAULT 0.0,
+    pne_entropy_avg REAL NOT NULL DEFAULT 0.0,
+    blink_rate_per_min REAL NOT NULL DEFAULT 0.0,
+    vergence_z_cm_avg REAL NOT NULL DEFAULT 0.0,
+    started_at TIMESTAMPTZ DEFAULT NOW(),
+    ended_at TIMESTAMPTZ
+);
+
+-- 6. Eye Tracking
+CREATE TABLE IF NOT EXISTS eye_tracking_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID NOT NULL,
+    frame_number INT NOT NULL,
+    gaze_x REAL NOT NULL,
+    gaze_y REAL NOT NULL,
+    gaze_z REAL DEFAULT 0.0,
+    ear_left REAL DEFAULT 0.0,
+    ear_right REAL DEFAULT 0.0,
+    confidence REAL NOT NULL DEFAULT 1.0,
+    time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 7. Tarefas Clínicas (Stroop, Go/No-Go, PASAT, Reversal)
+CREATE TABLE IF NOT EXISTS stroop_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID NOT NULL,
+    trial_number INT NOT NULL,
+    is_congruent BOOLEAN NOT NULL,
+    displayed_word TEXT NOT NULL,
+    displayed_color TEXT NOT NULL,
+    selected_color TEXT NOT NULL,
+    is_correct BOOLEAN NOT NULL,
+    response_time_ms REAL NOT NULL,
+    bpm REAL DEFAULT 72.0,
+    cardiac_acceleration REAL DEFAULT 0.0,
+    cardiac_deceleration REAL DEFAULT 0.0,
+    hrv_rmssd REAL DEFAULT 0.0
+);
+
+CREATE TABLE IF NOT EXISTS emotional_gonogo_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID NOT NULL,
+    trial_number INT NOT NULL,
+    stimulus_type TEXT NOT NULL,
+    emotion_label TEXT NOT NULL,
+    user_action TEXT NOT NULL,
+    is_correct BOOLEAN NOT NULL,
+    reaction_time_ms REAL NOT NULL,
+    hold_time_ms REAL NOT NULL DEFAULT 0.0,
+    gaze_latency_ms REAL NOT NULL DEFAULT 0.0,
+    zygomaticus_activation REAL NOT NULL DEFAULT 0.0,
+    corrugator_activation REAL NOT NULL DEFAULT 0.0,
+    bpm REAL DEFAULT 72.0,
+    cardiac_acceleration REAL DEFAULT 0.0,
+    cardiac_deceleration REAL DEFAULT 0.0,
+    hrv_rmssd REAL DEFAULT 0.0
+);
+
+CREATE TABLE IF NOT EXISTS pasat_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID NOT NULL,
+    trial_number INT NOT NULL,
+    current_digit INT NOT NULL,
+    previous_digit INT NOT NULL,
+    expected_sum INT NOT NULL,
+    user_sum INT,
+    is_correct BOOLEAN NOT NULL,
+    response_time_ms REAL NOT NULL,
+    inter_digit_interval_ms INT NOT NULL DEFAULT 0,
+    blink_count_in_trial INT NOT NULL DEFAULT 0,
+    corrugator_tension REAL NOT NULL DEFAULT 0.0,
+    bpm REAL DEFAULT 72.0,
+    cardiac_acceleration REAL DEFAULT 0.0,
+    cardiac_deceleration REAL DEFAULT 0.0,
+    hrv_rmssd REAL DEFAULT 0.0
+);
+
+CREATE TABLE IF NOT EXISTS reversal_learning_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID NOT NULL,
+    trial_number INT NOT NULL,
+    selected_option TEXT NOT NULL,
+    is_correct BOOLEAN NOT NULL,
+    received_feedback TEXT NOT NULL,
+    is_reversal_phase BOOLEAN NOT NULL,
+    response_time_ms REAL NOT NULL,
+    mouse_path_auc REAL NOT NULL DEFAULT 0.0,
+    mouse_jitter_score REAL NOT NULL DEFAULT 0.0,
+    post_feedback_corrugator REAL NOT NULL DEFAULT 0.0,
+    bpm REAL DEFAULT 72.0,
+    cardiac_acceleration REAL DEFAULT 0.0,
+    cardiac_deceleration REAL DEFAULT 0.0,
+    hrv_rmssd REAL DEFAULT 0.0
 );

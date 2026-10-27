@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>NeuroSync - Laudo Integrado & rPPG (Rust Core)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 0; }
+        
+        .navbar { background-color: #1e293b; border-bottom: 1px solid #334155; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 65px; position: sticky; top: 0; z-index: 1000; }
+        .brand { font-size: 20px; font-weight: 700; color: #38bdf8; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .brand span { color: #94a3b8; font-weight: 300; font-size: 14px; }
+        
+        .nav-links { display: flex; list-style: none; margin: 0; padding: 0; gap: 8px; }
+        .nav-links a { color: #cbd5e1; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; }
+        .nav-links a.active { background-color: #0284c7; color: #ffffff; }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 25px 20px; }
+
+        .patient-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 15px; margin-bottom: 20px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+        .label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        .value { font-size: 16px; font-weight: 700; color: #f8fafc; margin-top: 4px; }
+        
+        .tab-bar { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #334155; padding-bottom: 10px; overflow-x: auto; }
+        .tab-btn { padding: 10px 18px; font-size: 13px; font-weight: 600; background-color: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 6px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+        .tab-btn.active { background-color: #0284c7; color: #ffffff; border-color: #38bdf8; }
+        
+        .view-panel { display: none; }
+        .view-panel.active { display: block; }
+        
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .panel { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 18px; }
+        .chart-box { width: 100%; height: 300px; position: relative; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        th, td { border: 1px solid #334155; padding: 10px; text-align: left; }
+        th { background-color: #0f172a; color: #38bdf8; font-weight: 600; }
+        td { background-color: #1e293b; color: #cbd5e1; }
+
+        .rppg-card { background: #0f172a; border: 1px solid #22c55e; border-radius: 8px; padding: 18px; margin-bottom: 20px; }
+        .rppg-title { font-size: 13px; font-weight: 700; color: #22c55e; text-transform: uppercase; margin-bottom: 10px; }
+
+        .ai-opinion-card { background: #0f172a; border: 1px solid #0284c7; border-left: 5px solid #38bdf8; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .ai-title { font-size: 14px; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 10px; }
+        .ai-disclaimer { background: rgba(234, 179, 8, 0.1); border: 1px solid #eab308; color: #fef08a; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; margin-bottom: 12px; }
+        .ai-content { font-size: 13px; color: #cbd5e1; line-height: 1.6; }
+
+        .report-section { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 25px; margin-bottom: 20px; }
+        .report-title { font-size: 16px; font-weight: 600; color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 8px; margin-bottom: 15px; }
+        .notes-area { width: 100%; height: 90px; background-color: #0f172a; border: 1px solid #334155; color: #f8fafc; padding: 12px; border-radius: 6px; font-family: inherit; font-size: 13px; }
+        
+        .btn-print { background-color: #22c55e; color: #022c22; padding: 10px 20px; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; float: right; }
+
+        @media print {
+            .tab-bar, .btn-print, .navbar { display: none; }
+            .panel, .patient-card, .report-section, .ai-opinion-card, .rppg-card { border: 1px solid #ccc; background: #fff; color: #000; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <a href="/" class="brand">NeuroSync <span>| Integrated Medical Report</span></a>
+        <ul class="nav-links">
+            <li><a href="/">🏠 Início</a></li>
+            <li><a href="/tracker/projections/">📐 Análise 3D</a></li>
+            <li><a href="/stroop/">🧠 Stroop</a></li>
+            <li><a href="/gonogo/">🎭 Go/No-Go</a></li>
+            <li><a href="/pasat/">🧮 PASAT</a></li>
+            <li><a href="/reversal/">🔄 Reversal</a></li>
+            <li><a href="/microsaccades/">🔬 Micro-Nistagmo</a></li>
+            <li><a href="/report/" class="active">📋 Laudos</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <button class="btn-print" onclick="window.print()">🖨 Imprimir Laudo Integrado</button>
+
+        <div class="patient-card" style="margin-top: 10px;">
+            <div><div class="label">Paciente</div><div id="pPatientName" class="value">Dr. Roberto Silva (Simulado)</div></div>
+            <div><div class="label">Prontuário / ID</div><div id="pRecordId" class="value">HC-2026-8891</div></div>
+            <div><div class="label">Sessão ID</div><div id="pSessionId" class="value" style="font-size:12px;">00000000-0000-0000-0000-000000000000</div></div>
+            <div><div class="label">Data e Hora do Exame</div><div class="value" id="pDateTime" style="color:#38bdf8;">--/--/---- às --:--:--</div></div>
+        </div>
+
+        <div class="tab-bar">
+            <button id="tab-btn-stroop" class="tab-btn" onclick="switchTab('stroop')">🧠 Teste de Stroop</button>
+            <button id="tab-btn-gonogo" class="tab-btn active" onclick="switchTab('gonogo')">🎭 Go/No-Go</button>
+            <button id="tab-btn-pasat" class="tab-btn" onclick="switchTab('pasat')">🧮 PASAT</button>
+            <button id="tab-btn-reversal" class="tab-btn" onclick="switchTab('reversal')">🔄 Aprendizado Reverso</button>
+            <button id="tab-btn-oculomotor" class="tab-btn" onclick="switchTab('oculomotor')">📐 Oculomotor & BCEA</button>
+        </div>
+
+        <!-- PAINEL STROOP -->
+        <div id="tab-stroop" class="view-panel">
+            <div class="grid-2">
+                <div class="panel">
+                    <div class="label" style="margin-bottom: 10px;">Métricas de Interferência Cognitiva</div>
+                    <table>
+                        <thead>
+                            <tr><th>Indicador</th><th>Medida</th><th>Referência</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Acurácia Congruente</td><td id="rStroopAccCong" style="color:#22c55e; font-weight:bold;">98.0%</td><td>&gt; 95.0%</td></tr>
+                            <tr><td>Acurácia Incongruente</td><td id="rStroopAccIncong" style="color:#22c55e; font-weight:bold;">92.5%</td><td>&gt; 88.0%</td></tr>
+                            <tr><td>Efeito Stroop (Latência)</td><td id="rStroopEffect" style="color:#a855f7; font-weight:bold;">150 ms</td><td>&lt; 180 ms</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="panel">
+                    <div class="label" style="margin-bottom:10px;">Comparativo de Tempo de Reação</div>
+                    <div class="chart-box"><canvas id="chartStroop"></canvas></div>
+                </div>
+            </div>
+
+            <div class="rppg-card">
+                <div class="rppg-title">🫀 Resposta Autônoma Fisiológica (rPPG via Webcam) - Stroop Test</div>
+                <table>
+                    <thead>
+                        <tr><th>Biomarcador Cardíaco</th><th>Valor Medido</th><th>Faixa Fisiológica Esperada</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Frequência Cardíaca Média (BPM)</td><td id="rStroopBpm" style="color:#22c55e; font-weight:bold;">74.5 BPM</td><td>60 - 90 BPM</td></tr>
+                        <tr><td>Pico de Aceleração Cardíaca</td><td id="rStroopAcc" style="color:#f59e0b; font-weight:bold;">+3.20 BPM/s</td><td>&lt; +5.00 BPM/s</td></tr>
+                        <tr><td>Pico de Desaceleração Cardíaca</td><td id="rStroopDec" style="color:#38bdf8; font-weight:bold;">-2.80 BPM/s</td><td>&lt; -4.50 BPM/s</td></tr>
+                        <tr><td>Variabilidade Cardíaca (HRV RMSSD)</td><td id="rStroopHrv" style="color:#a855f7; font-weight:bold;">41.2 ms</td><td>30 - 65 ms</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="ai-opinion-card">
+                <div class="ai-title">🤖 Parecer Digital Preliminar & Acoplamento Fisiológico</div>
+                <div class="ai-disclaimer">⚠️ <strong>ATENÇÃO:</strong> Parecer preliminar que exige validação por especialista.</div>
+                <div id="stroopAiText" class="ai-content">
+                    O paciente apresentou controle atencional adequado durante o estresse de interferência, sem registrar picos patológicos de aceleração cardíaca.
+                </div>
+            </div>
+
+            <div class="report-section">
+                <div class="report-title">Parecer e Validação do Especialista</div>
+                <textarea class="notes-area" placeholder="Observações clínicas do Stroop Test..."></textarea>
+            </div>
+        </div>
+
+        <!-- PAINEL GO/NO-GO -->
+        <div id="tab-gonogo" class="view-panel active">
+            <div class="grid-2">
+                <div class="panel">
+                    <div class="label" style="margin-bottom: 10px;">Controle Inibitório & FACS</div>
+                    <table>
+                        <thead>
+                            <tr><th>Indicador</th><th>Medida</th><th>Referência</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Acurácia Global</td><td id="rGoAccuracy" style="color:#22c55e; font-weight:bold;">93.3%</td><td>&gt; 90.0%</td></tr>
+                            <tr><td>Tempo de Reação Go</td><td id="rGoRT" style="color:#38bdf8; font-weight:bold;">320 ms</td><td>250 - 400 ms</td></tr>
+                            <tr><td>Erros de Comissão</td><td id="rGoCommission" style="color:#ef4444; font-weight:bold;">2 erros</td><td>&le; 2 erros</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="panel">
+                    <div class="label" style="margin-bottom:10px;">Perfil de Resposta Inibitória</div>
+                    <div class="chart-box"><canvas id="chartGoNoGo"></canvas></div>
+                </div>
+            </div>
+
+            <div class="rppg-card">
+                <div class="rppg-title">🫀 Resposta Autônoma Fisiológica (rPPG via Webcam) - Go/No-Go</div>
+                <table>
+                    <thead>
+                        <tr><th>Biomarcador Cardíaco</th><th>Valor Medido</th><th>Faixa Fisiológica Esperada</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Frequência Cardíaca Média (BPM)</td><td id="rGoBpm" style="color:#22c55e; font-weight:bold;">73.1 BPM</td><td>60 - 90 BPM</td></tr>
+                        <tr><td>Pico de Aceleração Cardíaca</td><td id="rGoAcc" style="color:#f59e0b; font-weight:bold;">+2.40 BPM/s</td><td>&lt; +5.00 BPM/s</td></tr>
+                        <tr><td>Pico de Desaceleração Cardíaca</td><td id="rGoDec" style="color:#38bdf8; font-weight:bold;">-1.90 BPM/s</td><td>&lt; -4.50 BPM/s</td></tr>
+                        <tr><td>Variabilidade Cardíaca (HRV RMSSD)</td><td id="rGoHrv" style="color:#a855f7; font-weight:bold;">43.8 ms</td><td>30 - 65 ms</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="ai-opinion-card">
+                <div class="ai-title">🤖 Parecer Digital Preliminar (NeuroSync Core)</div>
+                <div class="ai-disclaimer">⚠️ <strong>ATENÇÃO:</strong> Parecer computacional preliminar que exige validação por especialista.</div>
+                <div id="gonogoAiText" class="ai-content">O perfil aponta para um padrão de Controle Inibitório Preservado.</div>
+            </div>
+
+            <div class="report-section">
+                <div class="report-title">Parecer e Validação do Especialista</div>
+                <textarea class="notes-area" placeholder="Validação do parecer..."></textarea>
+            </div>
+        </div>
+
+        <!-- PAINEL PASAT -->
+        <div id="tab-pasat" class="view-panel">
+            <div class="grid-2">
+                <div class="panel">
+                    <div class="label" style="margin-bottom: 10px;">Memória de Trabalho & Carga Cognitiva</div>
+                    <table>
+                        <thead>
+                            <tr><th>Indicador</th><th>Medida</th><th>Referência</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Acurácia Sequencial</td><td id="rPasatAcc" style="color:#22c55e; font-weight:bold;">88.0%</td><td>&gt; 80.0%</td></tr>
+                            <tr><td>Variabilidade do TR</td><td id="rPasatVar" style="color:#a855f7; font-weight:bold;">110 ms</td><td>&lt; 150 ms</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="panel">
+                    <div class="label" style="margin-bottom:10px;">Curva de Estresse e Carga Sequencial</div>
+                    <div class="chart-box"><canvas id="chartPasat"></canvas></div>
+                </div>
+            </div>
+
+            <div class="rppg-card">
+                <div class="rppg-title">🫀 Resposta Autônoma Fisiológica (rPPG via Webcam) - PASAT</div>
+                <table>
+                    <thead>
+                        <tr><th>Biomarcador Cardíaco</th><th>Valor Medido</th><th>Faixa Fisiológica Esperada</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Frequência Cardíaca Média (BPM)</td><td id="rPasatBpm" style="color:#22c55e; font-weight:bold;">78.2 BPM</td><td>60 - 90 BPM</td></tr>
+                        <tr><td>Pico de Aceleração Cardíaca</td><td id="rPasatAcc" style="color:#f59e0b; font-weight:bold;">+4.10 BPM/s</td><td>&lt; +5.00 BPM/s</td></tr>
+                        <tr><td>Pico de Desaceleração Cardíaca</td><td id="rPasatDec" style="color:#38bdf8; font-weight:bold;">-3.20 BPM/s</td><td>&lt; -4.50 BPM/s</td></tr>
+                        <tr><td>Variabilidade Cardíaca (HRV RMSSD)</td><td id="rPasatHrv" style="color:#a855f7; font-weight:bold;">36.5 ms</td><td>30 - 65 ms</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="ai-opinion-card">
+                <div class="ai-title">🤖 Parecer Digital Preliminar (PASAT Engine)</div>
+                <div class="ai-disclaimer">⚠️ <strong>ATENÇÃO:</strong> Parecer computacional preliminar que exige validação por especialista.</div>
+                <div id="pasatAiText" class="ai-content">Análise demonstra Boa Tolerância à Carga Cognitiva Incremental.</div>
+            </div>
+
+            <div class="report-section">
+                <div class="report-title">Parecer e Validação do Especialista</div>
+                <textarea class="notes-area" placeholder="Validação do parecer..."></textarea>
+            </div>
+        </div>
+
+        <!-- PAINEL REVERSAL -->
+        <div id="tab-reversal" class="view-panel">
+            <div class="grid-2">
+                <div class="panel">
+                    <div class="label" style="margin-bottom: 10px;">Plasticidade & Dinâmica do Mouse</div>
+                    <table>
+                        <thead>
+                            <tr><th>Indicador</th><th>Medida</th><th>Referência</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Erros Perseverativos</td><td id="rRevErrors" style="color:#ef4444; font-weight:bold;">2 erros</td><td>&le; 3 erros</td></tr>
+                            <tr><td>Vacilação do Mouse (Jitter)</td><td id="rRevJitter" style="color:#a855f7; font-weight:bold;">12.4 AUC</td><td>&lt; 20.0 AUC</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="panel">
+                    <div class="label" style="margin-bottom:10px;">Hesitação de Decisão</div>
+                    <div class="chart-box"><canvas id="chartReversal"></canvas></div>
+                </div>
+            </div>
+
+            <div class="rppg-card">
+                <div class="rppg-title">🫀 Resposta Autônoma Fisiológica (rPPG via Webcam) - Reversal Learning</div>
+                <table>
+                    <thead>
+                        <tr><th>Biomarcador Cardíaco</th><th>Valor Medido</th><th>Faixa Fisiológica Esperada</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Frequência Cardíaca Média (BPM)</td><td id="rRevBpm" style="color:#22c55e; font-weight:bold;">75.0 BPM</td><td>60 - 90 BPM</td></tr>
+                        <tr><td>Pico de Aceleração Cardíaca</td><td id="rRevAcc" style="color:#f59e0b; font-weight:bold;">+3.50 BPM/s</td><td>&lt; +5.00 BPM/s</td></tr>
+                        <tr><td>Pico de Desaceleração Cardíaca</td><td id="rRevDec" style="color:#38bdf8; font-weight:bold;">-2.90 BPM/s</td><td>&lt; -4.50 BPM/s</td></tr>
+                        <tr><td>Variabilidade Cardíaca (HRV RMSSD)</td><td id="rRevHrv" style="color:#a855f7; font-weight:bold;">39.8 ms</td><td>30 - 65 ms</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="ai-opinion-card">
+                <div class="ai-title">🤖 Parecer Digital Preliminar (Reversal Engine)</div>
+                <div class="ai-disclaimer">⚠️ <strong>ATENÇÃO:</strong> Parecer computacional preliminar que exige validação por especialista.</div>
+                <div id="reversalAiText" class="ai-content">Perfil aponta para Plasticidade Orbitofrontal Adequada.</div>
+            </div>
+
+            <div class="report-section">
+                <div class="report-title">Parecer e Validação do Especialista</div>
+                <textarea class="notes-area" placeholder="Validação do parecer..."></textarea>
+            </div>
+        </div>
+
+        <!-- PAINEL OCULOMOTOR -->
+        <div id="tab-oculomotor" class="view-panel">
+            <div class="grid-2">
+                <div class="panel">
+                    <div class="label" style="margin-bottom: 10px;">Biomarcadores Oculotores & BCEA</div>
+                    <table>
+                        <thead>
+                            <tr><th>Biomarcador</th><th>Valor Medido</th><th>Referência</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Estabilidade BCEA (68% ISO)</td><td id="rOculoBcea" style="color:#22c55e; font-weight:bold;">0.85 deg²</td><td>&lt; 1.50 deg²</td></tr>
+                            <tr><td>Main Sequence Ratio</td><td id="rOculoMsr" style="color:#a855f7; font-weight:bold;">28.4 s⁻¹</td><td>15.0 - 45.0 s⁻¹</td></tr>
+                            <tr><td>Entropia PNE</td><td id="rOculoPne" style="color:#38bdf8; font-weight:bold;">0.42</td><td>0.20 - 0.85</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="panel">
+                    <div class="label" style="margin-bottom:10px;">Dispersão Coronal Foveal</div>
+                    <div class="chart-box"><canvas id="chartOculomotor"></canvas></div>
+                </div>
+            </div>
+
+            <div class="rppg-card">
+                <div class="rppg-title">🫀 Resposta Autônoma Fisiológica (rPPG via Webcam) - Oculomotoria</div>
+                <table>
+                    <thead>
+                        <tr><th>Biomarcador Cardíaco</th><th>Valor Medido</th><th>Faixa Fisiológica Esperada</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Frequência Cardíaca Média (BPM)</td><td id="rOculoBpm" style="color:#22c55e; font-weight:bold;">71.8 BPM</td><td>60 - 90 BPM</td></tr>
+                        <tr><td>Pico de Aceleração Cardíaca</td><td id="rOculoAcc" style="color:#f59e0b; font-weight:bold;">+1.80 BPM/s</td><td>&lt; +5.00 BPM/s</td></tr>
+                        <tr><td>Pico de Desaceleração Cardíaca</td><td id="rOculoDec" style="color:#38bdf8; font-weight:bold;">-1.50 BPM/s</td><td>&lt; -4.50 BPM/s</td></tr>
+                        <tr><td>Variabilidade Cardíaca (HRV RMSSD)</td><td id="rOculoHrv" style="color:#a855f7; font-weight:bold;">44.5 ms</td><td>30 - 65 ms</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="ai-opinion-card">
+                <div class="ai-title">🤖 Parecer Digital Preliminar (Oculomotor Core)</div>
+                <div class="ai-disclaimer">⚠️ <strong>ATENÇÃO:</strong> Parecer computacional preliminar que exige validação por especialista.</div>
+                <div class="ai-content">Estabilidade foveal mantida com baixa dispersão ocular durante a tarefa de fixação.</div>
+            </div>
+
+            <div class="report-section">
+                <div class="report-title">Parecer e Validação do Especialista</div>
+                <textarea class="notes-area" placeholder="Validação do parecer oculomotor..."></textarea>
+            </div>
+        </div>
+    </main>
+
+<script>
+    let chartOculomotorInstance = null;
+
+    window.onload = function() {
+        initStroopChart();
+        initGoNoGoChart();
+        initPasatChart();
+        initReversalChart();
+        initOculomotorChart();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const requestedTab = urlParams.get('tab');
+        if (requestedTab) switchTab(requestedTab);
+        else switchTab('gonogo');
+
+        loadBackendSummaries();
+    };
+
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.view-panel').forEach(panel => panel.classList.remove('active'));
+
+        const targetBtn = document.getElementById(`tab-btn-${tabName}`);
+        const targetPanel = document.getElementById(`tab-${tabName}`);
+        if (targetBtn && targetPanel) {
+            targetBtn.classList.add('active');
+            targetPanel.classList.add('active');
+        }
+
+        if (tabName === 'oculomotor' && chartOculomotorInstance) {
+            setTimeout(() => { chartOculomotorInstance.resize(); }, 50);
+        }
+    }
+
+    function initStroopChart() {
+        const ctx = document.getElementById('chartStroop').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: { labels: ['Congruente', 'Incongruente'], datasets: [{ label: 'TR Média (ms)', data: [410, 560], backgroundColor: ['#38bdf8', '#f59e0b'] }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: '#334155' }, ticks: { color: '#f8fafc' } }, y: { grid: { color: '#334155' }, ticks: { color: '#f8fafc' } } }, plugins: { legend: { labels: { color: '#f8fafc' } } } }
+        });
+    }
+
+    function initGoNoGoChart() {
+        const ctx = document.getElementById('chartGoNoGo').getContext('2d');
+        new Chart(ctx, {
+            type: 'radar',
+            data: { labels: ['Velocidade Go', 'Controle Inibitório', 'Atenção', 'Expressividade', 'Corrugator'], datasets: [{ label: 'Perfil Paciente', data: [85, 90, 95, 75, 60], backgroundColor: 'rgba(56, 189, 248, 0.2)', borderColor: '#38bdf8' }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { r: { grid: { color: '#334155' }, ticks: { display: false } } }, plugins: { legend: { labels: { color: '#f8fafc' } } } }
+        });
+    }
+
+    function initPasatChart() {
+        const ctx = document.getElementById('chartPasat').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: { labels: ['Bloco 1', 'Bloco 2', 'Bloco 3'], datasets: [{ label: 'TR (ms)', data: [580, 620, 710], borderColor: '#f59e0b', fill: false }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: '#334155' }, ticks: { color: '#f8fafc' } }, y: { grid: { color: '#334155' }, ticks: { color: '#f8fafc' } } }, plugins: { legend: { labels: { color: '#f8fafc' } } } }
+        });
+    }
+
+    function initReversalChart() {
+        const ctx = document.getElementById('chartReversal').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: { labels: ['Aquisição', 'Inversão'], datasets: [{ label: 'Jitter AUC', data: [8.2, 18.5], backgroundColor: ['#38bdf8', '#ec4899'] }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: '#334155' }, ticks: { color: '#f8fafc' } }, y: { grid: { color: '#334155' }, ticks: { color: '#f8fafc' } } }, plugins: { legend: { labels: { color: '#f8fafc' } } } }
+        });
+    }
+
+    function initOculomotorChart() {
+        const ctx = document.getElementById('chartOculomotor').getContext('2d');
+        chartOculomotorInstance = new Chart(ctx, {
+            type: 'scatter',
+            data: { datasets: [{ label: 'Olhar (°)', data: [{x:0, y:0}, {x:1, y:-1}, {x:-1, y:2}], backgroundColor: '#38bdf8' }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { min: -10, max: 10, grid: { color: '#334155' }, ticks: { color: '#f8fafc' } }, y: { min: -10, max: 10, grid: { color: '#334155' }, ticks: { color: '#f8fafc' } } }, plugins: { legend: { labels: { color: '#f8fafc' } } } }
+        });
+    }
+
+    function loadBackendSummaries() {
+        const urlParams = new URLSearchParams(window.location.search);
+        let sessionId = urlParams.get('session_id');
+
+        if (!sessionId) {
+            fetch('/api/patients/')
+                .then(res => res.json())
+                .then(patients => {
+                    if (patients.length > 0) {
+                        const lastPatient = patients[0];
+                        document.getElementById('pPatientName').innerText = lastPatient.full_name;
+                        document.getElementById('pRecordId').innerText = lastPatient.medical_record_id;
+                        document.getElementById('pSessionId').innerText = lastPatient.id;
+                        fetchSummariesForSession(lastPatient.id);
+                    } else {
+                        fetchSummariesForSession("00000000-0000-0000-0000-000000000000");
+                    }
+                })
+                .catch(() => fetchSummariesForSession("00000000-0000-0000-0000-000000000000"));
+        } else {
+            document.getElementById('pSessionId').innerText = sessionId;
+            fetchSummariesForSession(sessionId);
+        }
+    }
+
+    function fetchSummariesForSession(sessionId) {
+        const updateTime = (ts) => {
+            if (ts) document.getElementById('pDateTime').innerText = ts;
+        };
+
+        // Stroop
+        fetch(`/api/assessments/stroop/summary/${sessionId}/`)
+            .then(res => res.json())
+            .then(data => {
+                updateTime(data.formatted_timestamp);
+                if (data.total_trials > 0) {
+                    document.getElementById('rStroopAccCong').innerText = `${data.accuracy_congruent}%`;
+                    document.getElementById('rStroopAccIncong').innerText = `${data.accuracy_incongruent}%`;
+                    document.getElementById('rStroopEffect').innerText = `${data.stroop_effect_ms} ms`;
+                    document.getElementById('rStroopBpm').innerText = `${data.mean_bpm} BPM`;
+                    document.getElementById('rStroopAcc').innerText = `+${data.max_cardiac_acceleration} BPM/s`;
+                    document.getElementById('rStroopDec').innerText = `-${data.max_cardiac_deceleration} BPM/s`;
+                    document.getElementById('rStroopHrv').innerText = `${data.mean_hrv_rmssd} ms`;
+                }
+            });
+
+        // Go/No-Go
+        fetch(`/api/assessments/gonogo/summary/${sessionId}/`)
+            .then(res => res.json())
+            .then(data => {
+                updateTime(data.formatted_timestamp);
+                if (data.total_trials > 0) {
+                    document.getElementById('rGoAccuracy').innerText = `${data.accuracy_percentage}%`;
+                    document.getElementById('rGoRT').innerText = `${data.mean_go_rt_ms} ms`;
+                    document.getElementById('rGoCommission').innerText = `${data.commission_errors_nogo} erros`;
+                    document.getElementById('rGoBpm').innerText = `${data.mean_bpm} BPM`;
+                    document.getElementById('rGoAcc').innerText = `+${data.max_cardiac_acceleration} BPM/s`;
+                    document.getElementById('rGoDec').innerText = `-${data.max_cardiac_deceleration} BPM/s`;
+                    document.getElementById('rGoHrv').innerText = `${data.mean_hrv_rmssd} ms`;
+                }
+            });
+
+        // PASAT
+        fetch(`/api/assessments/pasat/summary/${sessionId}/`)
+            .then(res => res.json())
+            .then(data => {
+                updateTime(data.formatted_timestamp);
+                if (data.total_trials > 0) {
+                    document.getElementById('rPasatAcc').innerText = `${data.accuracy_percentage}%`;
+                    document.getElementById('rPasatVar').innerText = `${data.response_time_variability} ms`;
+                    document.getElementById('rPasatBpm').innerText = `${data.mean_bpm} BPM`;
+                    document.getElementById('rPasatAcc').innerText = `+${data.max_cardiac_acceleration} BPM/s`;
+                    document.getElementById('rPasatDec').innerText = `-${data.max_cardiac_deceleration} BPM/s`;
+                    document.getElementById('rPasatHrv').innerText = `${data.mean_hrv_rmssd} ms`;
+                }
+            });
+
+        // Reversal
+        fetch(`/api/assessments/reversal/summary/${sessionId}/`)
+            .then(res => res.json())
+            .then(data => {
+                updateTime(data.formatted_timestamp);
+                if (data.total_trials > 0) {
+                    document.getElementById('rRevErrors').innerText = `${data.perseverative_errors} erros`;
+                    document.getElementById('rRevJitter').innerText = `${data.mean_mouse_jitter} AUC`;
+                    document.getElementById('rRevBpm').innerText = `${data.mean_bpm} BPM`;
+                    document.getElementById('rRevAcc').innerText = `+${data.max_cardiac_acceleration} BPM/s`;
+                    document.getElementById('rRevDec').innerText = `-${data.max_cardiac_deceleration} BPM/s`;
+                    document.getElementById('rRevHrv').innerText = `${data.mean_hrv_rmssd} ms`;
+                }
+            });
+
+        // Oculomotor
+        fetch(`/api/assessments/microsaccades/summary/${sessionId}/`)
+            .then(res => res.json())
+            .then(data => {
+                updateTime(data.formatted_timestamp);
+                if (data.bcea_score !== undefined) {
+                    document.getElementById('rOculoBcea').innerText = `${data.bcea_score} deg²`;
+                    document.getElementById('rOculoMsr').innerText = `${data.main_sequence_ratio} s⁻¹`;
+                    document.getElementById('rOculoPne').innerText = `${data.pne_entropy}`;
+                    document.getElementById('rOculoBpm').innerText = `${data.mean_bpm} BPM`;
+                    document.getElementById('rOculoAcc').innerText = `+${data.max_cardiac_acceleration} BPM/s`;
+                    document.getElementById('rOculoDec').innerText = `-${data.max_cardiac_deceleration} BPM/s`;
+                    document.getElementById('rOculoHrv').innerText = `${data.mean_hrv_rmssd} ms`;
+                }
+            });
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>NeuroSync - Análise Angular & 3D (Rust Core)</title>
+    <!-- MediaPipe & Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 0; }
+        
+        .navbar { background-color: #1e293b; border-bottom: 1px solid #334155; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 65px; position: sticky; top: 0; z-index: 1000; }
+        .brand { font-size: 20px; font-weight: 700; color: #38bdf8; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .brand span { color: #94a3b8; font-weight: 300; font-size: 14px; }
+        
+        .nav-links { display: flex; list-style: none; margin: 0; padding: 0; gap: 8px; }
+        .nav-links a { color: #cbd5e1; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .nav-links a:hover { background-color: #334155; color: #38bdf8; }
+        .nav-links a.active { background-color: #0284c7; color: #ffffff; }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 25px 20px; }
+
+        .controls-bar { display: flex; gap: 12px; margin-bottom: 20px; background: #1e293b; padding: 15px; border-radius: 8px; align-items: center; }
+        .btn { padding: 10px 20px; font-weight: 600; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+        .btn-start { background-color: #22c55e; color: #022c22; }
+        .btn-pause { background-color: #eab308; color: #422006; }
+        .btn-resume { background-color: #3b82f6; color: #172554; }
+        .btn-stop { background-color: #ef4444; color: #450a0a; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .status-text { margin-left: auto; font-weight: 600; color: #cbd5e1; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; margin-bottom: 20px; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px 15px; }
+        .card-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 6px; }
+        .card-value { font-size: 20px; font-weight: 700; color: #f8fafc; }
+        .card-subtext { font-size: 11px; color: #64748b; margin-top: 4px; }
+
+        .planes-grid { display: grid; grid-template-columns: 280px 1fr 1fr; gap: 15px; }
+        .panel { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; }
+        .panel-title { font-size: 12px; font-weight: 600; color: #38bdf8; text-transform: uppercase; margin-bottom: 10px; }
+        
+        #videoContainer { width: 100%; height: 200px; background-color: #020617; border-radius: 6px; overflow: hidden; }
+        #webcamVideo { display: none; }
+        #cameraCanvas { width: 100%; height: 100%; object-fit: cover; }
+
+        .chart-box { width: 100%; height: 350px; position: relative; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <a href="/" class="brand">NeuroSync <span>| Rust Core Engine</span></a>
+        <ul class="nav-links">
+            <li><a href="/">🏠 Início</a></li>
+            <li><a href="/tracker/projections/" class="active">📐 Análise 3D & Graus</a></li>
+            <li><a href="/stroop/">🧠 Teste de Stroop</a></li>
+            <li><a href="/report/">📋 Laudo & Séries Temporais</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <video id="webcamVideo" playsinline></video>
+
+        <!-- Controles -->
+        <div class="controls-bar">
+            <button id="btnStart" class="btn btn-start" onclick="startSession()">▶ Iniciar Análise Clínica</button>
+            <button id="btnPause" class="btn btn-pause" onclick="pauseSession()" disabled>⏸ Pausar</button>
+            <button id="btnResume" class="btn btn-resume" onclick="resumeSession()" disabled>⏯ Continuar</button>
+            <button id="btnStop" class="btn btn-stop" onclick="stopSession()" disabled>⏹ Parar e Salvar</button>
+            <span id="statusLabel" class="status-text">Status: Pronto</span>
+        </div>
+
+        <!-- Cards de Biomarcadores -->
+        <div class="stats-grid">
+            <div class="card">
+                <div class="card-title">Estabilidade BCEA (ISO)</div>
+                <div id="statBCEA" class="card-value" style="color: #4ade80;">0.00 <span style="font-size: 11px;">deg²</span></div>
+                <div class="card-subtext">Bivariate Contour Ellipse Area</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Main Sequence Ratio</div>
+                <div id="statMainSeq" class="card-value" style="color: #a855f7;">0.0 <span style="font-size: 11px;">s⁻¹</span></div>
+                <div class="card-subtext">Peak Speed / Amplitude</div>
+            </div>
+            <div class="card">
+                <div class="card-title">PNE (Micro-Tremor)</div>
+                <div id="statPNE" class="card-value" style="color: #f35627;">0.00</div>
+                <div class="card-subtext">Cognitive Load Entropy</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Ângulos (θx / θy)</div>
+                <div id="statAngles" class="card-value" style="color: #38bdf8; font-size: 16px;">0.0° / 0.0°</div>
+                <div class="card-subtext">Yaw e Pitch Foveal</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Profundidade Z</div>
+                <div id="statDepthZ" class="card-value" style="color: #facc15;">0.0 cm</div>
+                <div class="card-subtext">Distância Vergenhal</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Lotes no Banco</div>
+                <div id="statSavedBatches" class="card-value">0</div>
+                <div class="card-subtext">TimescaleDB (Rust API)</div>
+            </div>
+        </div>
+
+        <!-- Planos Ortogonais e Séries Temporais -->
+        <div class="planes-grid">
+            <div class="panel">
+                <div class="panel-title">Câmera & Overlay</div>
+                <div id="videoContainer">
+                    <canvas id="cameraCanvas"></canvas>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">Plano Coronal & Elipse BCEA (Fixação Foveal)</div>
+                <div class="chart-box">
+                    <canvas id="coronalChart"></canvas>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">Evolução Temporal: Main Sequence Ratio vs PNE</div>
+                <div class="chart-box">
+                    <canvas id="timeSeriesChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </main>
+
+<script>
+    const SESSION_ID = "00000000-0000-0000-0000-000000000000";
+    let eventBuffer = [];
+    let frameCounter = 0;
+    let savedBatchesCount = 0;
+    let isTracking = false;
+    let isPaused = false;
+    let sendInterval = null;
+    let camera, faceMesh;
+
+    let camCanvas, camCtx;
+    let coronalChart, timeSeriesChart;
+
+    const FOCAL_DISTANCE_PX = 800;
+    let angleHistoryX = [];
+    let angleHistoryY = [];
+    let lastTimestamp = performance.now();
+    let lastAngleX = 0, lastAngleY = 0;
+
+    window.onload = function() {
+        camCanvas = document.getElementById('cameraCanvas');
+        camCtx = camCanvas.getContext('2d');
+        initCharts();
+    };
+
+    function initCharts() {
+        const ctxCoronal = document.getElementById('coronalChart').getContext('2d');
+        coronalChart = new Chart(ctxCoronal, {
+            type: 'scatter',
+            data: {
+                datasets: [
+                    { label: 'Pontos do Olhar (°)', data: [], backgroundColor: '#38bdf8', pointRadius: 4 },
+                    { label: 'Centro Foveal', data: [{x: 0, y: 0}], backgroundColor: '#ef4444', pointRadius: 6 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { min: -25, max: 25, title: { display: true, text: 'θx Horizontal (°)', color: '#94a3b8' }, grid: { color: '#334155' }, ticks: { color: '#f8fafc' } },
+                    y: { min: -20, max: 20, title: { display: true, text: 'θy Vertical (°)', color: '#94a3b8' }, grid: { color: '#334155' }, ticks: { color: '#f8fafc' } }
+                },
+                plugins: { legend: { labels: { color: '#f8fafc' } } }
+            }
+        });
+
+        const ctxTime = document.getElementById('timeSeriesChart').getContext('2d');
+        timeSeriesChart = new Chart(ctxTime, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: 'Main Sequence Ratio (s⁻¹)', data: [], borderColor: '#a855f7', borderWidth: 2, fill: false, pointRadius: 0, yAxisID: 'y' },
+                    { label: 'Entropy / PNE', data: [], borderColor: '#f35627', borderWidth: 2, borderDash: [3, 3], fill: false, pointRadius: 0, yAxisID: 'y1' }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { title: { display: true, text: 'Quadros (Frames)', color: '#94a3b8' }, grid: { color: '#334155' }, ticks: { color: '#f8fafc' } },
+                    y: { type: 'linear', display: true, position: 'left', min: 0, max: 100, title: { display: true, text: 'Main Sequence (s⁻¹)', color: '#a855f7' }, grid: { color: '#334155' }, ticks: { color: '#a855f7' } },
+                    y1: { type: 'linear', display: true, position: 'right', min: 0, max: 2, title: { display: true, text: 'PNE Entropy', color: '#f35627' }, grid: { drawOnChartArea: false }, ticks: { color: '#f35627' } }
+                },
+                plugins: { legend: { labels: { color: '#f8fafc' } } }
+            }
+        });
+    }
+
+    function calculateBCEA(arrX, arrY) {
+        if (arrX.length < 5) return 0;
+        const n = arrX.length;
+        const meanX = arrX.reduce((a, b) => a + b, 0) / n;
+        const meanY = arrY.reduce((a, b) => a + b, 0) / n;
+
+        let varX = 0, varY = 0, covXY = 0;
+        for (let i = 0; i < n; i++) {
+            const dx = arrX[i] - meanX;
+            const dy = arrY[i] - meanY;
+            varX += dx * dx;
+            varY += dy * dy;
+            covXY += dx * dy;
+        }
+        varX /= (n - 1);
+        varY /= (n - 1);
+        covXY /= (n - 1);
+
+        const stdX = Math.sqrt(varX);
+        const stdY = Math.sqrt(varY);
+        const rho = (stdX * stdY === 0) ? 0 : covXY / (stdX * stdY);
+
+        const k = 1.14;
+        const bcea = 2 * k * Math.PI * stdX * stdY * Math.sqrt(Math.max(0, 1 - rho * rho));
+        return parseFloat(bcea.toFixed(2));
+    }
+
+    function calculatePNE(arrX) {
+        if (arrX.length < 10) return 0;
+        let diffs = [];
+        for (let i = 1; i < arrX.length; i++) {
+            diffs.push(Math.abs(arrX[i] - arrX[i - 1]));
+        }
+        const meanDiff = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+        if (meanDiff === 0) return 0;
+        const variance = diffs.reduce((a, b) => a + Math.pow(b - meanDiff, 2), 0) / diffs.length;
+        return parseFloat(Math.log(1 + variance).toFixed(2));
+    }
+
+    async function startSession() {
+        document.getElementById('statusLabel').innerText = "Status: Conectando Câmera e Modelos...";
+        updateButtonStates({start: false, pause: false, resume: false, stop: false});
+
+        const videoElement = document.getElementById('webcamVideo');
+
+        faceMesh = new FaceMesh({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+        });
+
+        faceMesh.setOptions({
+            maxNumFaces: 1,
+            refineLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        faceMesh.onResults(onResults);
+
+        camera = new Camera(videoElement, {
+            onFrame: async () => {
+                if (isTracking && !isPaused) {
+                    await faceMesh.send({image: videoElement});
+                }
+            },
+            width: 640,
+            height: 480
+        });
+
+        await camera.start();
+
+        isTracking = true;
+        isPaused = false;
+        document.getElementById('statusLabel').innerText = "Status: Análise Biométrica Ativa (Rust Engine)";
+        updateButtonStates({start: false, pause: true, resume: false, stop: true});
+
+        sendInterval = setInterval(sendBatchToBackend, 2000);
+    }
+
+    function onResults(results) {
+        if (isPaused || !results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return;
+
+        camCtx.save();
+        camCtx.clearRect(0, 0, camCanvas.width, camCanvas.height);
+        camCtx.drawImage(results.image, 0, 0, camCanvas.width, camCanvas.height);
+
+        const landmarks = results.multiFaceLandmarks[0];
+        const leftIris = landmarks[468];
+        const rightIris = landmarks[473];
+
+        camCtx.fillStyle = '#4ade80';
+        camCtx.beginPath();
+        camCtx.arc(leftIris.x * camCanvas.width, leftIris.y * camCanvas.height, 4, 0, Math.PI * 2);
+        camCtx.fill();
+
+        camCtx.fillStyle = '#38bdf8';
+        camCtx.beginPath();
+        camCtx.arc(rightIris.x * camCanvas.width, rightIris.y * camCanvas.height, 4, 0, Math.PI * 2);
+        camCtx.fill();
+        camCtx.restore();
+
+        const avgIrisX = (leftIris.x + rightIris.x) / 2;
+        const avgIrisY = (leftIris.y + rightIris.y) / 2;
+        const screenX = (1 - avgIrisX) * window.innerWidth;
+        const screenY = avgIrisY * window.innerHeight;
+
+        const angleXDeg = Math.atan((screenX - window.innerWidth / 2) / FOCAL_DISTANCE_PX) * (180 / Math.PI);
+        const angleYDeg = Math.atan((screenY - window.innerHeight / 2) / FOCAL_DISTANCE_PX) * (180 / Math.PI);
+
+        angleHistoryX.push(angleXDeg);
+        angleHistoryY.push(angleYDeg);
+        if (angleHistoryX.length > 30) {
+            angleHistoryX.shift();
+            angleHistoryY.shift();
+        }
+
+        const bceaVal = calculateBCEA(angleHistoryX, angleHistoryY);
+        const pneVal = calculatePNE(angleHistoryX);
+
+        const now = performance.now();
+        const dt = (now - lastTimestamp) / 1000.0;
+        lastTimestamp = now;
+
+        const dAngle = Math.sqrt(Math.pow(angleXDeg - lastAngleX, 2) + Math.pow(angleYDeg - lastAngleY, 2));
+        const angularSpeed = dt > 0 ? dAngle / dt : 0;
+        const mainSeqRatio = dAngle > 0.1 ? parseFloat((angularSpeed / dAngle).toFixed(1)) : 0;
+
+        lastAngleX = angleXDeg;
+        lastAngleY = angleYDeg;
+
+        const eyeDistance = Math.sqrt(Math.pow(leftIris.x - rightIris.x, 2) + Math.pow(leftIris.y - rightIris.y, 2));
+        const depthZCm = Math.round((0.063 * FOCAL_DISTANCE_PX) / (eyeDistance * window.innerWidth));
+
+        frameCounter++;
+
+        document.getElementById('statBCEA').innerText = `${bceaVal} deg²`;
+        document.getElementById('statMainSeq').innerText = `${mainSeqRatio} s⁻¹`;
+        document.getElementById('statPNE').innerText = pneVal;
+        document.getElementById('statAngles').innerText = `${angleXDeg.toFixed(1)}° / ${angleYDeg.toFixed(1)}°`;
+        document.getElementById('statDepthZ').innerText = `${depthZCm} cm`;
+
+        const points = angleHistoryX.map((x, i) => ({ x: x, y: angleHistoryY[i] }));
+        coronalChart.data.datasets[0].data = points;
+        coronalChart.update('none');
+
+        timeSeriesChart.data.labels.push(frameCounter);
+        timeSeriesChart.data.datasets[0].data.push(mainSeqRatio);
+        timeSeriesChart.data.datasets[1].data.push(pneVal);
+
+        if (timeSeriesChart.data.labels.length > 50) {
+            timeSeriesChart.data.labels.shift();
+            timeSeriesChart.data.datasets[0].data.shift();
+            timeSeriesChart.data.datasets[1].data.shift();
+        }
+        timeSeriesChart.update('none');
+
+        eventBuffer.push({
+            "time": new Date().toISOString(),
+            "session": SESSION_ID,
+            "frame_number": frameCounter,
+            "gaze_x": angleXDeg,
+            "gaze_y": angleYDeg,
+            "confidence": 1.0
+        });
+    }
+
+    function pauseSession() {
+        if (!isTracking) return;
+        isPaused = true;
+        document.getElementById('statusLabel').innerText = "Status: Pausado";
+        updateButtonStates({start: false, pause: false, resume: true, stop: true});
+    }
+
+    function resumeSession() {
+        if (!isTracking) return;
+        isPaused = false;
+        document.getElementById('statusLabel').innerText = "Status: Análise Ativa";
+        updateButtonStates({start: false, pause: true, resume: false, stop: true});
+    }
+
+    function stopSession() {
+        isTracking = false;
+        isPaused = false;
+        clearInterval(sendInterval);
+        if (camera) camera.stop();
+
+        sendBatchToBackend();
+
+        document.getElementById('statusLabel').innerText = "Status: Processando laudo via Rust Backend...";
+
+        fetch(`/api/assessments/sessions/${SESSION_ID}/finalize/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('statusLabel').innerText = "Status: Laudo Processado com Sucesso!";
+            window.location.href = '/report/';
+        })
+        .catch(error => {
+            console.error('Erro ao consolidar laudo:', error);
+            document.getElementById('statusLabel').innerText = "Erro ao consolidar laudo no servidor.";
+            updateButtonStates({start: true, pause: false, resume: false, stop: false});
+        });
+    }
+
+    function updateButtonStates(states) {
+        document.getElementById('btnStart').disabled = !states.start;
+        document.getElementById('btnPause').disabled = !states.pause;
+        document.getElementById('btnResume').disabled = !states.resume;
+        document.getElementById('btnStop').disabled = !states.stop;
+    }
+
+    function sendBatchToBackend() {
+        if (eventBuffer.length === 0) return;
+        const currentBatch = [...eventBuffer];
+        eventBuffer = [];
+
+        fetch('/api/assessments/events/ingest/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                "session_id": SESSION_ID,
+                "events": currentBatch
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            savedBatchesCount++;
+            document.getElementById('statSavedBatches').innerText = savedBatchesCount;
+        })
+        .catch((error) => console.error('Erro ao enviar lote ao backend:', error));
+    }
+</script>
+</body>
+</html>

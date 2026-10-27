@@ -1,64 +1,34 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct AuthResponse {
-    pub token: String,
-    pub user_id: String,
-    pub name: String,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct TrialData {
-    pub trial_number: usize,
-    pub trail_number: usize,
+    pub trial_number: u32,
+    pub trail_number: u32,
     pub reaction_time_ms: f64,
     pub is_correct: bool,
-    pub timestamp: String,
+    pub test_type: String,      // SRT, CRT, GoNoGo
+    pub stimulus_type: String,  // Visual, Auditivo, Choque, etc.
+    pub timestamp: f64,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SessionRecord {
     pub id: String,
-    pub created_at: String,
+    pub user_id: String,
+    pub test_type: String,
+    pub timestamp: String,
     pub avg_reaction_time_ms: f64,
-    pub cns_readiness_score: Option<f64>,
-    pub hrv_rmssd: Option<f64>,
-    pub trail_context: Option<String>,
-    pub test_type: Option<String>,
-    pub rppg_bpm: Option<f64>,
-    pub saccadic_latency_ms: Option<f64>,
+    pub accuracy: f64,
+    pub total_trials: usize,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct SaveSessionPayload {
-    pub level_completed: usize,
-    pub avg_reaction_time_ms: f64,
-    pub saccadic_latency_ms: Option<f64>,
-    pub heart_rate_bpm: Option<f64>,
-    pub respiration_rate_bpm: Option<f64>,
-    pub hrv_rmssd: Option<f64>,
-    pub cns_readiness_score: Option<f64>,
-    pub trail_context: Option<String>,
+#[derive(Clone, Debug, PartialEq)]
+pub enum TestMode {
+    ByRepetitions(u32), // Ex: 10, 15 ou 20 repetições
+    ByTime(u64),        // Ex: 30s, 60s, 180s (3 min)
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Page {
-    Dashboard,
-    SimpleReactionTest,
-    ChoiceReactionTest,
-    GoNoGoTest,
-    RPPGMonitor,
-    PricingPlans,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum TimeRange {
-    Daily,
-    Weekly,
-    Monthly,
-    Yearly,
-}
-
+#[derive(Clone, Debug)]
 pub struct MotivationalTrail {
     pub index: usize,
     pub id: &'static str,
@@ -67,24 +37,19 @@ pub struct MotivationalTrail {
     pub color: &'static str,
 }
 
+// 13 TRILHAS MOTIVACIONAIS E COGNITIVAS
 pub const MOTIVATIONAL_TRAILS: &[MotivationalTrail] = &[
-    MotivationalTrail { index: 0, id: "Trilha 1", name: "Foco Cortical Sustentado", description: "Otimização de ondas alfa/beta para atenção contínua.", color: "#06b6d4" },
-    MotivationalTrail { index: 1, id: "Trilha 2", name: "Controle de Impulsividade", description: "Inibição de resposta e modulação do córtex pré-frontal.", color: "#10b981" },
-    MotivationalTrail { index: 2, id: "Trilha 3", name: "Velocidade de Processamento", description: "Tempos de trânsito sináptico e resposta motora rápida.", color: "#a855f7" },
-    MotivationalTrail { index: 3, id: "Trilha 4", name: "Resiliência sob Fadiga", description: "Manutenção de desempenho cognitivo sob carga autonômica.", color: "#f59e0b" },
-    MotivationalTrail { index: 4, id: "Trilha 5", name: "Sincronia Mão-Olho", description: "Precisão sacádica e acoplamento visuomotor.", color: "#ef4444" },
-    MotivationalTrail { index: 5, id: "Trilha 6", name: "Equilíbrio Autonômico Vagal", description: "Modulação parassimpática e coerência cardíaca.", color: "#3b82f6" },
-    MotivationalTrail { index: 6, id: "Trilha 7", name: "Ativação de Alerta Fásico", description: "Prontidão do sistema reticular ativador ascendente.", color: "#ec4899" },
-    MotivationalTrail { index: 7, id: "Trilha 8", name: "Flexibilidade Cognitiva", description: "Alternância rápida de set mental e inibição setorial.", color: "#14b8a6" },
-    MotivationalTrail { index: 8, id: "Trilha 9", name: "Estabilidade Foveal", description: "Redução de intrusões sacádicas e micro-movimentos.", color: "#8b5cf6" },
-    MotivationalTrail { index: 9, id: "Trilha 10", name: "Capacidade de Inibição Seletiva", description: "Filtro de estímulos distractores periféricos.", color: "#f97316" },
-    MotivationalTrail { index: 10, id: "Trilha 11", name: "Recuperação Pós-Esforço", description: "Eficiência de reestabelecimento da homeostase.", color: "#6366f1" },
-    MotivationalTrail { index: 11, id: "Trilha 12", name: "Tonificação Noradrenérgica", description: "Alerta tônico e otimização de ganho sináptico.", color: "#84cc16" },
-    MotivationalTrail { index: 12, id: "Trilha 13", name: "Integração Neuro-Motora Total", description: "Sinergia completa entre biomarcadores e resposta física.", color: "#06b6d4" },
-];
-
-pub const TRAIL_COLORS: &[&str] = &[
-    "#06b6d4", "#10b981", "#a855f7", "#f59e0b", "#ef4444", 
-    "#3b82f6", "#ec4899", "#14b8a6", "#8b5cf6", "#f97316", 
-    "#6366f1", "#84cc16", "#06b6d4"
+    MotivationalTrail { index: 0, id: "cortical_focus", name: "Foco Cortical Sustentado", description: "Alerta sustentado e vigilância pré-motora.", color: "#06b6d4" },
+    MotivationalTrail { index: 1, id: "processing_speed", name: "Velocidade de Processamento", description: "Otimização da taxa de condução axonial.", color: "#a855f7" },
+    MotivationalTrail { index: 2, id: "inhibitory_control", name: "Controle Inibitório", description: "Supressão de impulsos motores reflexos.", color: "#10b981" },
+    MotivationalTrail { index: 3, id: "choice_decision", name: "Tomada de Decisão", description: "Discriminação visual em escolha simples e complexa.", color: "#f59e0b" },
+    MotivationalTrail { index: 4, id: "cognitive_flexibility", name: "Flexibilidade Cognitiva", description: "Alternância de conjuntos mentais e adaptação.", color: "#ec4899" },
+    MotivationalTrail { index: 5, id: "working_memory", name: "Memória de Trabalho Neural", description: "Retenção temporária e manipulação de estimulo.", color: "#3b82f6" },
+    MotivationalTrail { index: 6, id: "stress_resistance", name: "Resistência ao Estresse", description: "Manutenção do desempenho sob pressão cronológica.", color: "#ef4444" },
+    MotivationalTrail { index: 7, id: "motor_precision", name: "Precisão Neuro-Motora", description: "Controle fino de coordenação e tempo de disparo.", color: "#84cc16" },
+    MotivationalTrail { index: 8, id: "central_fatigue", name: "Resistência à Fadiga Central", description: "Avaliador de depleção de neurotransmissores.", color: "#6366f1" },
+    MotivationalTrail { index: 9, id: "autonomic_recovery", name: "Recuperação Autonômica", description: "Acompanhamento HRV / rPPG pós-estímulo.", color: "#14b8a6" },
+    MotivationalTrail { index: 10, id: "visual_search", name: "Busca e Varredura Visual", description: "Mecanismo de atenção top-down espacial.", color: "#d97706" },
+    MotivationalTrail { index: 11, id: "dual_task", name: "Dupla Tarefa Cognitiva", description: "Divisão de recursos de atenção executiva.", color: "#8b5cf6" },
+    MotivationalTrail { index: 12, id: "peak_readiness", name: "Prontidão de Pico do SNC", description: "Aferição de estado ideal para competição/foco.", color: "#22c55e" },
 ];

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}NeuroSync Platform{% endblock %}</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 0; }
+        
+        .navbar { background-color: #1e293b; border-bottom: 1px solid #334155; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 65px; position: sticky; top: 0; z-index: 1000; }
+        .brand { font-size: 20px; font-weight: 700; color: #38bdf8; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .brand span { color: #94a3b8; font-weight: 300; font-size: 14px; }
+        
+        .nav-links { display: flex; list-style: none; margin: 0; padding: 0; gap: 8px; }
+        .nav-links a { color: #cbd5e1; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .nav-links a:hover { background-color: #334155; color: #38bdf8; }
+        .nav-links a.active { background-color: #0284c7; color: #ffffff; }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 25px 20px; }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+    <nav class="navbar">
+        <a href="{% url 'home' %}" class="brand">NeuroSync <span>| Platform</span></a>
+        <ul class="nav-links">
+    <li><a href="{% url 'home' %}">🏠 Início</a></li>
+    <li><a href="{% url 'eye-tracker-test' %}">👁 Rastreamento WebGazer</a></li>
+    <li><a href="{% url 'eye-tracker-projections' %}">📐 Análise Angular & 3D</a></li>
+    <li><a href="{% url 'stroop-test' %}">🧠 Teste de Stroop</a></li>
+    <li><a href="{% url 'assessment-report' %}">📋 Laudo & Série Temporal</a></li>
+</ul>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+</body>
+</html>

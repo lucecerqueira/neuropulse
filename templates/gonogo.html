@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>NeuroSync - Emotional Go/No-Go Paradigm & rPPG</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="/templates/rppg_engine.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 0; user-select: none; }
+        
+        .navbar { background-color: #1e293b; border-bottom: 1px solid #334155; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 65px; position: sticky; top: 0; z-index: 1000; }
+        .brand { font-size: 20px; font-weight: 700; color: #38bdf8; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .brand span { color: #94a3b8; font-weight: 300; font-size: 14px; }
+        
+        .nav-links { display: flex; list-style: none; margin: 0; padding: 0; gap: 8px; }
+        .nav-links a { color: #cbd5e1; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .nav-links a:hover { background-color: #334155; color: #38bdf8; }
+        .nav-links a.active { background-color: #0284c7; color: #ffffff; }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+        .controls-bar { display: flex; gap: 12px; margin-bottom: 20px; background: #1e293b; padding: 15px; border-radius: 8px; align-items: center; border: 1px solid #334155; flex-wrap: wrap; }
+        .btn { padding: 10px 18px; font-weight: 600; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+        .btn-start { background-color: #22c55e; color: #022c22; }
+        .btn-pause { background-color: #eab308; color: #422006; }
+        .btn-resume { background-color: #3b82f6; color: #172554; }
+        .btn-stop { background-color: #ef4444; color: #450a0a; }
+        .btn-pop { background-color: #0284c7; color: #ffffff; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .status-text { margin-left: auto; font-weight: 600; color: #cbd5e1; }
+
+        .grid-gonogo { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
+        
+        .stage-area { background: #1e293b; border: 1px solid #334155; border-radius: 12px; height: 480px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; cursor: pointer; }
+        .stimulus-card { font-size: 72px; font-weight: 900; padding: 30px 60px; border-radius: 16px; text-align: center; }
+
+        .instruction-box-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 100%; max-width: 520px; margin-top: 20px; }
+        .guide-card { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 15px; text-align: center; }
+        .guide-card h4 { margin: 0 0 6px 0; font-size: 14px; }
+        .guide-card p { margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.4; }
+        
+        .metric-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 15px; margin-bottom: 12px; }
+        .metric-title { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        .metric-value { font-size: 20px; font-weight: 700; color: #38bdf8; margin-top: 4px; }
+
+        #camCanvas { width: 100%; height: 150px; background: #020617; border-radius: 6px; object-fit: cover; }
+        #webcamVideo { display: none; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-body { background: #1e293b; border: 1px solid #38bdf8; border-radius: 12px; max-width: 650px; width: 90%; padding: 30px; color: #f8fafc; max-height: 85vh; overflow-y: auto; }
+        .modal-body h2 { color: #38bdf8; margin-top: 0; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <a href="/" class="brand">NeuroSync <span>| Affective Go/No-Go Engine</span></a>
+        <ul class="nav-links">
+            <li><a href="/">🏠 Início</a></li>
+            <li><a href="/tracker/projections/">📐 Análise 3D</a></li>
+            <li><a href="/stroop/">🧠 Stroop</a></li>
+            <li><a href="/gonogo/" class="active">🎭 Emotional Go/No-Go</a></li>
+            <li><a href="/pasat/">🧮 PASAT</a></li>
+            <li><a href="/reversal/">🔄 Reversal</a></li>
+            <li><a href="/report/">📋 Laudos</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <video id="webcamVideo" playsinline></video>
+
+        <div class="controls-bar">
+            <div style="display:flex; flex-direction:column; gap:4px; margin-right: 10px;">
+                <label style="font-size:11px; color:#94a3b8; font-weight:bold; text-transform:uppercase;">Paciente Selecionado:</label>
+                <div style="display:flex; gap:6px;">
+                    <select id="patientSelect" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:6px; font-weight:600; min-width: 220px;"></select>
+                    <button class="btn btn-pop" onclick="openPatientModal()" style="padding: 8px 12px;">➕</button>
+                </div>
+            </div>
+
+            <button id="btnStart" class="btn btn-start" onclick="startTest()">▶ Iniciar Teste</button>
+            <button id="btnPause" class="btn btn-pause" onclick="pauseTest()" disabled>⏸ Pausar</button>
+            <button id="btnResume" class="btn btn-resume" onclick="resumeTest()" disabled>⏯ Continuar</button>
+            <button id="btnStop" class="btn btn-stop" onclick="stopTest()" disabled>⏹ Parar e Salvar</button>
+            <span id="statusLabel" class="status-text">Status: Aguardando Início</span>
+        </div>
+
+        <div class="grid-gonogo">
+            <div id="stageArea" class="stage-area" onmousedown="handleUserResponse('MOUSE_CLICK')">
+                <div id="startScreen" style="display: flex; flex-direction: column; align-items: center;">
+                    <h2 style="color:#38bdf8; margin-top:0;">Inibição de Resposta & Resposta Autônoma</h2>
+                    <p style="color:#94a3b8; max-width:500px; margin-bottom:15px; text-align:center;">
+                        Siga as orientações abaixo antes de iniciar a avaliação:
+                    </p>
+
+                    <div class="instruction-box-grid">
+                        <div class="guide-card" style="border-color: #22c55e;">
+                            <h4 style="color:#22c55e;">1. ESTÍMULO GO (Neutro)</h4>
+                            <p>Ao ver <strong>😐 NEUTRO</strong>, aperte a <strong>Barra de ESPAÇO</strong> ou dê um <strong>Clique de Mouse</strong>!</p>
+                        </div>
+                        <div class="guide-card" style="border-color: #ef4444;">
+                            <h4 style="color:#ef4444;">2. ESTÍMULO NO-GO (Emocional)</h4>
+                            <p>Ao ver <strong>😃 ALEGRIA</strong> ou <strong>😠 RAIVA</strong>, <strong>NÃO TOQUE EM NADA</strong>!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="stimulusBox" class="stimulus-card" style="display:none;"></div>
+            </div>
+
+            <div>
+                <div class="metric-card">
+                    <div class="metric-title">rPPG & Fotopletismografia Facial</div>
+                    <canvas id="camCanvas"></canvas>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-title">Frequência Cardíaca (BPM rPPG)</div>
+                    <div id="mBpm" class="metric-value" style="color:#22c55e;">72.0 BPM</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-title">Aceleração / Desaceleração</div>
+                    <div id="mAccDec" class="metric-value" style="color:#f59e0b; font-size:16px;">+0.00 / -0.00 BPM/s</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-title">FACS Zygomaticus / Corrugator</div>
+                    <div id="mFACS" class="metric-value" style="color:#facc15; font-size:18px;">0.00 / 0.00</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-title">Progresso da Sessão</div>
+                    <div id="mProgress" class="metric-value" style="color:#38bdf8;">0 / 30</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Novo Paciente -->
+    <div id="patientModal" class="modal-overlay">
+        <div class="modal-body" style="max-width: 480px;">
+            <h2>Cadastrar Novo Paciente</h2>
+            <div style="display:flex; flex-direction:column; gap:12px; margin-top:15px;">
+                <input type="text" id="pFullName" placeholder="Nome Completo" style="padding:10px; background:#0f172a; border:1px solid #334155; color:#fff; border-radius:6px;">
+                <input type="text" id="pRecordId" placeholder="Prontuário / CPF" style="padding:10px; background:#0f172a; border:1px solid #334155; color:#fff; border-radius:6px;">
+                <input type="date" id="pBirthDate" style="padding:10px; background:#0f172a; border:1px solid #334155; color:#fff; border-radius:6px;">
+                <button class="btn btn-start" onclick="saveNewPatient()" style="width:100%;">💾 Salvar Paciente</button>
+                <button class="btn btn-stop" onclick="closePatientModal()" style="width:100%;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    let activeSessionId = "00000000-0000-0000-0000-000000000000";
+    let trialIndex = 0;
+    const TOTAL_TRIALS = 30;
+    
+    let isRunning = false;
+    let isPaused = false;
+    let currentStimulus = null;
+    let trialStartTime = 0;
+    let hasResponded = false;
+    let timeoutTimer = null;
+
+    let zygomaticusVal = 0.0;
+    let corrugatorVal = 0.0;
+
+    const rppgEngine = new NeuroSyncRPPG(30, 150);
+    let latestHrMetrics = { bpm: 72.0, acceleration_bpm_s: 0.0, deceleration_bpm_s: 0.0, hrv_rmssd_ms: 42.0 };
+
+    const STIMULI = [
+        { label: "NEUTRAL", type: "NEUTRAL", text: "😐 NEUTRO", bg: "#334155", color: "#f8fafc" },
+        { label: "HAPPY", type: "EMOTIONAL", text: "😃 ALEGRIA", bg: "#15803d", color: "#fef08a" },
+        { label: "ANGRY", type: "EMOTIONAL", text: "😠 RAIVA", bg: "#b91c1c", color: "#fca5a5" }
+    ];
+
+    window.onload = function() {
+        initFaceAndRPPG();
+        setupInputListeners();
+        loadPatientsList();
+    };
+
+    function loadPatientsList() {
+        fetch('/api/patients/')
+            .then(res => res.json())
+            .then(patients => {
+                const select = document.getElementById('patientSelect');
+                select.innerHTML = '';
+                patients.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.innerText = `${p.full_name} (${p.medical_record_id})`;
+                    select.appendChild(opt);
+                });
+            });
+    }
+
+    function openPatientModal() { document.getElementById('patientModal').style.display = 'flex'; }
+    function closePatientModal() { document.getElementById('patientModal').style.display = 'none'; }
+
+    function saveNewPatient() {
+        fetch('/api/patients/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                full_name: document.getElementById('pFullName').value,
+                medical_record_id: document.getElementById('pRecordId').value,
+                birth_date: document.getElementById('pBirthDate').value,
+                notes: "Cadastrado no Go/No-Go"
+            })
+        }).then(() => { closePatientModal(); loadPatientsList(); });
+    }
+
+    async function initFaceAndRPPG() {
+        const video = document.getElementById('webcamVideo');
+        const canvas = document.getElementById('camCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const faceMesh = new FaceMesh({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
+        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true });
+
+        faceMesh.onResults((results) => {
+            if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return;
+            ctx.save();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+            const lm = results.multiFaceLandmarks[0];
+            
+            // rPPG Computation
+            rppgEngine.extractROIIntensity(ctx, lm, canvas.width, canvas.height);
+            latestHrMetrics = rppgEngine.computeHeartRateMetrics();
+
+            // FACS Computation
+            const lipWidth = Math.hypot(lm[61].x - lm[291].x, lm[61].y - lm[291].y);
+            zygomaticusVal = parseFloat((lipWidth * 10).toFixed(2));
+            const eyebrowDist = Math.hypot(lm[55].x - lm[285].x, lm[55].y - lm[285].y);
+            corrugatorVal = parseFloat(((1 / (eyebrowDist + 0.001)) * 0.05).toFixed(2));
+
+            document.getElementById('mBpm').innerText = `${latestHrMetrics.bpm} BPM`;
+            document.getElementById('mAccDec').innerText = `+${latestHrMetrics.acceleration_bpm_s} / -${latestHrMetrics.deceleration_bpm_s} BPM/s`;
+            document.getElementById('mFACS').innerText = `${zygomaticusVal} / ${corrugatorVal}`;
+            ctx.restore();
+        });
+
+        const camera = new Camera(video, { onFrame: async () => { await faceMesh.send({ image: video }); }, width: 320, height: 240 });
+        await camera.start();
+    }
+
+    function setupInputListeners() {
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !e.repeat && isRunning && !isPaused) handleUserResponse('KEY_PRESS');
+        });
+    }
+
+    function startTest() {
+        const selectedPatient = document.getElementById('patientSelect').value;
+        if (selectedPatient) activeSessionId = selectedPatient;
+
+        isRunning = true; isPaused = false; trialIndex = 0;
+        document.getElementById('startScreen').style.display = 'none';
+        document.getElementById('stimulusBox').style.display = 'block';
+        document.getElementById('statusLabel').innerText = "Status: Teste em Execução";
+        updateButtonStates({ start: false, pause: true, resume: false, stop: true });
+        nextTrial();
+    }
+
+    function pauseTest() {
+        isRunning = false; isPaused = true; clearTimeout(timeoutTimer);
+        document.getElementById('stimulusBox').style.display = 'none';
+        document.getElementById('statusLabel').innerText = "Status: Teste Pausado";
+        updateButtonStates({ start: false, pause: false, resume: true, stop: true });
+    }
+
+    function resumeTest() {
+        isRunning = true; isPaused = false;
+        document.getElementById('stimulusBox').style.display = 'block';
+        document.getElementById('statusLabel').innerText = "Status: Teste em Execução";
+        updateButtonStates({ start: false, pause: true, resume: false, stop: true });
+        nextTrial();
+    }
+
+    function stopTest() {
+        isRunning = false; isPaused = false; clearTimeout(timeoutTimer);
+        document.getElementById('stimulusBox').style.display = 'none';
+        document.getElementById('statusLabel').innerText = "Status: Teste Encerrado";
+        updateButtonStates({ start: true, pause: false, resume: false, stop: false });
+        finishTest();
+    }
+
+    function nextTrial() {
+        if (!isRunning || isPaused) return;
+        if (trialIndex >= TOTAL_TRIALS) { stopTest(); return; }
+
+        trialIndex++;
+        document.getElementById('mProgress').innerText = `${trialIndex} / ${TOTAL_TRIALS}`;
+        hasResponded = false;
+
+        currentStimulus = STIMULI[Math.floor(Math.random() * STIMULI.length)];
+        const box = document.getElementById('stimulusBox');
+        box.innerText = currentStimulus.text;
+        box.style.backgroundColor = currentStimulus.bg;
+        box.style.color = currentStimulus.color;
+
+        trialStartTime = performance.now();
+
+        timeoutTimer = setTimeout(() => {
+            if (!hasResponded && isRunning && !isPaused) {
+                recordTrialData("TIMEOUT", 0);
+                nextTrial();
+            }
+        }, 500);
+    }
+
+    function handleUserResponse(actionType) {
+        if (!isRunning || isPaused || hasResponded || !currentStimulus) return;
+        hasResponded = true; clearTimeout(timeoutTimer);
+        const rt = performance.now() - trialStartTime;
+        recordTrialData(actionType, rt);
+        setTimeout(nextTrial, 250);
+    }
+
+    function recordTrialData(actionType, rt) {
+        const isCorrect = (currentStimulus.type === "NEUTRAL" && actionType !== "TIMEOUT") ||
+                          (currentStimulus.type === "EMOTIONAL" && actionType === "TIMEOUT");
+
+        fetch('/api/assessments/gonogo/trial/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: activeSessionId,
+                trial_number: trialIndex,
+                stimulus_type: currentStimulus.type,
+                emotion_label: currentStimulus.label,
+                user_action: actionType,
+                is_correct: isCorrect,
+                reaction_time_ms: rt,
+                hold_time_ms: 120.0,
+                zygomaticus_activation: zygomaticusVal,
+                corrugator_activation: corrugatorVal,
+                gaze_latency_ms: 150.0,
+                heart_rate: latestHrMetrics
+            })
+        });
+    }
+
+    function finishTest() {
+        document.getElementById('stageArea').innerHTML = `
+            <h2 style="color:#22c55e;">Go/No-Go Concluído!</h2>
+            <p style="color:#cbd5e1;">Dados comportamentais e rPPG gravados com sucesso.</p>
+            <button class="btn btn-start" onclick="window.location.href='/report/?tab=gonogo'">📋 Ver Resultado no Laudo</button>
+        `;
+    }
+
+    function updateButtonStates(states) {
+        document.getElementById('btnStart').disabled = !states.start;
+        document.getElementById('btnPause').disabled = !states.pause;
+        document.getElementById('btnResume').disabled = !states.resume;
+        document.getElementById('btnStop').disabled = !states.stop;
+    }
+</script>
+</body>
+</html>

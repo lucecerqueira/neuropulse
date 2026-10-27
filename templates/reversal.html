@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>NeuroSync - Reversal Learning & rPPG Engine</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="/templates/rppg_engine.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 0; user-select: none; }
+        
+        .navbar { background-color: #1e293b; border-bottom: 1px solid #334155; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; height: 65px; position: sticky; top: 0; z-index: 1000; }
+        .brand { font-size: 20px; font-weight: 700; color: #38bdf8; text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .brand span { color: #94a3b8; font-weight: 300; font-size: 14px; }
+        
+        .nav-links { display: flex; list-style: none; margin: 0; padding: 0; gap: 8px; }
+        .nav-links a { color: #cbd5e1; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; }
+        .nav-links a.active { background-color: #0284c7; color: #ffffff; }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+        .controls-bar { display: flex; gap: 12px; margin-bottom: 20px; background: #1e293b; padding: 15px; border-radius: 8px; align-items: center; border: 1px solid #334155; flex-wrap: wrap; }
+        .btn { padding: 10px 18px; font-weight: 600; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+        .btn-start { background-color: #22c55e; color: #022c22; }
+        .btn-pause { background-color: #eab308; color: #422006; }
+        .btn-resume { background-color: #3b82f6; color: #172554; }
+        .btn-stop { background-color: #ef4444; color: #450a0a; }
+        .btn-pop { background-color: #0284c7; color: #ffffff; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .status-text { margin-left: auto; font-weight: 600; color: #cbd5e1; }
+
+        .grid-reversal { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
+        .stage-area { background: #1e293b; border: 1px solid #334155; border-radius: 12px; height: 480px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+
+        .choices-box { display: flex; gap: 40px; margin-top: 30px; }
+        .choice-card { width: 170px; height: 200px; background: #0f172a; border: 2px solid #334155; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 58px; cursor: pointer; transition: all 0.2s; }
+        .choice-card:hover { transform: translateY(-5px); border-color: #38bdf8; }
+
+        .feedback-banner { font-size: 22px; font-weight: 800; padding: 10px 25px; border-radius: 8px; margin-top: 20px; display: none; }
+
+        .metric-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 15px; margin-bottom: 12px; }
+        .metric-title { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+        .metric-value { font-size: 20px; font-weight: 700; color: #38bdf8; margin-top: 4px; }
+
+        #camCanvas { width: 100%; height: 150px; background: #020617; border-radius: 6px; object-fit: cover; }
+        #webcamVideo { display: none; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-body { background: #1e293b; border: 1px solid #38bdf8; border-radius: 12px; max-width: 500px; width: 90%; padding: 25px; color: #f8fafc; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <a href="/" class="brand">NeuroSync <span>| Reversal Learning Core</span></a>
+        <ul class="nav-links">
+            <li><a href="/">🏠 Início</a></li>
+            <li><a href="/tracker/projections/">📐 Análise 3D</a></li>
+            <li><a href="/stroop/">🧠 Stroop</a></li>
+            <li><a href="/gonogo/">🎭 Go/No-Go</a></li>
+            <li><a href="/pasat/">🧮 PASAT</a></li>
+            <li><a href="/reversal/" class="active">🔄 Reversal</a></li>
+            <li><a href="/report/">📋 Laudos</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <video id="webcamVideo" playsinline></video>
+
+        <div class="controls-bar">
+            <div style="display:flex; flex-direction:column; gap:4px; margin-right: 10px;">
+                <label style="font-size:11px; color:#94a3b8; font-weight:bold; text-transform:uppercase;">Paciente Selecionado:</label>
+                <div style="display:flex; gap:6px;">
+                    <select id="patientSelect" style="background:#0f172a; border:1px solid #334155; color:#f8fafc; padding:8px; border-radius:6px; font-weight:600; min-width: 220px;"></select>
+                    <button class="btn btn-pop" onclick="openPatientModal()" style="padding: 8px 12px;">➕</button>
+                </div>
+            </div>
+
+            <button id="btnStart" class="btn btn-start" onclick="startTest()">▶ Iniciar Teste</button>
+            <button id="btnPause" class="btn btn-pause" onclick="pauseTest()" disabled>⏸ Pausar</button>
+            <button id="btnResume" class="btn btn-resume" onclick="resumeTest()" disabled>⏯ Continuar</button>
+            <button id="btnStop" class="btn btn-stop" onclick="stopTest()" disabled>⏹ Parar e Salvar</button>
+            <span id="statusLabel" class="status-text">Status: Aguardando Início</span>
+        </div>
+
+        <div class="grid-reversal">
+            <div id="stageArea" class="stage-area" onmousemove="trackMouse(event)">
+                <div id="startScreen" style="text-align: center;">
+                    <h2 style="color:#38bdf8; margin-top:0;">Aprendizado Reverso & Resposta Autônoma</h2>
+                    <p style="color:#94a3b8; max-width:480px; line-height:1.5;">
+                        Escolha um dos símbolos. A regra pode ser invertida sem aviso prévio!
+                    </p>
+                </div>
+
+                <div id="gameBox" style="display:none; text-align: center; width: 100%;">
+                    <div class="choices-box">
+                        <div class="choice-card" onclick="makeChoice('OPTION_A')">🔮</div>
+                        <div class="choice-card" onclick="makeChoice('OPTION_B')">🧿</div>
+                    </div>
+                    <div id="feedbackBanner" class="feedback-banner"></div>
+                </div>
+            </div>
+
+            <div>
+                <div class="metric-card">
+                    <div class="metric-title">rPPG & Fotopletismografia Facial</div>
+                    <canvas id="camCanvas"></canvas>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-title">Frequência Cardíaca (BPM rPPG)</div>
+                    <div id="mBpm" class="metric-value" style="color:#22c55e;">72.0 BPM</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-title">Aceleração / Desaceleração</div>
+                    <div id="mAccDec" class="metric-value" style="color:#f59e0b; font-size:16px;">+0.00 / -0.00 BPM/s</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-title">Vacilação do Mouse (Jitter AUC)</div>
+                    <div id="mJitter" class="metric-value" style="color:#38bdf8;">0.00</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-title">Progresso da Sessão</div>
+                    <div id="mProgress" class="metric-value" style="color:#a855f7;">0 / 30</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Novo Paciente -->
+    <div id="patientModal" class="modal-overlay">
+        <div class="modal-body">
+            <h2>Cadastrar Novo Paciente</h2>
+            <div style="display:flex; flex-direction:column; gap:12px; margin-top:15px;">
+                <input type="text" id="pFullName" placeholder="Nome Completo" style="padding:10px; background:#0f172a; border:1px solid #334155; color:#fff; border-radius:6px;">
+                <input type="text" id="pRecordId" placeholder="Prontuário / CPF" style="padding:10px; background:#0f172a; border:1px solid #334155; color:#fff; border-radius:6px;">
+                <input type="date" id="pBirthDate" style="padding:10px; background:#0f172a; border:1px solid #334155; color:#fff; border-radius:6px;">
+                <button class="btn btn-start" onclick="saveNewPatient()" style="width:100%;">💾 Salvar Paciente</button>
+                <button class="btn btn-stop" onclick="closePatientModal()" style="width:100%;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    let activeSessionId = "00000000-0000-0000-0000-000000000000";
+    let trialIndex = 0;
+    const TOTAL_TRIALS = 30;
+
+    let isRunning = false;
+    let isPaused = false;
+    let trialStartTime = 0;
+    let correctOption = "OPTION_A";
+
+    let mousePositions = [];
+    const rppgEngine = new NeuroSyncRPPG(30, 150);
+    let latestHrMetrics = { bpm: 72.0, acceleration_bpm_s: 0.0, deceleration_bpm_s: 0.0, hrv_rmssd_ms: 42.0 };
+
+    window.onload = function() {
+        initFaceAndRPPG();
+        loadPatientsList();
+    };
+
+    function loadPatientsList() {
+        fetch('/api/patients/')
+            .then(res => res.json())
+            .then(patients => {
+                const select = document.getElementById('patientSelect');
+                select.innerHTML = '';
+                patients.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.innerText = `${p.full_name} (${p.medical_record_id})`;
+                    select.appendChild(opt);
+                });
+            });
+    }
+
+    function openPatientModal() { document.getElementById('patientModal').style.display = 'flex'; }
+    function closePatientModal() { document.getElementById('patientModal').style.display = 'none'; }
+
+    function saveNewPatient() {
+        fetch('/api/patients/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                full_name: document.getElementById('pFullName').value,
+                medical_record_id: document.getElementById('pRecordId').value,
+                birth_date: document.getElementById('pBirthDate').value,
+                notes: "Cadastrado no Reversal Test"
+            })
+        }).then(() => { closePatientModal(); loadPatientsList(); });
+    }
+
+    async function initFaceAndRPPG() {
+        const video = document.getElementById('webcamVideo');
+        const canvas = document.getElementById('camCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const faceMesh = new FaceMesh({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
+        faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true });
+
+        faceMesh.onResults((results) => {
+            if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) return;
+            ctx.save();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+            const lm = results.multiFaceLandmarks[0];
+            rppgEngine.extractROIIntensity(ctx, lm, canvas.width, canvas.height);
+            latestHrMetrics = rppgEngine.computeHeartRateMetrics();
+
+            document.getElementById('mBpm').innerText = `${latestHrMetrics.bpm} BPM`;
+            document.getElementById('mAccDec').innerText = `+${latestHrMetrics.acceleration_bpm_s} / -${latestHrMetrics.deceleration_bpm_s} BPM/s`;
+            ctx.restore();
+        });
+
+        const camera = new Camera(video, { onFrame: async () => { await faceMesh.send({ image: video }); }, width: 320, height: 240 });
+        await camera.start();
+    }
+
+    function trackMouse(e) {
+        if (!isRunning || isPaused) return;
+        mousePositions.push({ x: e.clientX, y: e.clientY });
+        if (mousePositions.length > 40) mousePositions.shift();
+    }
+
+    function calculateMouseJitter() {
+        if (mousePositions.length < 5) return 0.0;
+        let totalDev = 0;
+        for (let i = 2; i < mousePositions.length; i++) {
+            let dx = mousePositions[i].x - mousePositions[i-1].x;
+            let dy = mousePositions[i].y - mousePositions[i-1].y;
+            totalDev += Math.sqrt(dx*dx + dy*dy);
+        }
+        return parseFloat((totalDev / mousePositions.length).toFixed(2));
+    }
+
+    function startTest() {
+        const selectedPatient = document.getElementById('patientSelect').value;
+        if (selectedPatient) activeSessionId = selectedPatient;
+
+        isRunning = true; isPaused = false; trialIndex = 0; correctOption = "OPTION_A";
+        document.getElementById('startScreen').style.display = 'none';
+        document.getElementById('gameBox').style.display = 'block';
+        document.getElementById('statusLabel').innerText = "Status: Reversal em Execução";
+
+        updateButtonStates({ start: false, pause: true, resume: false, stop: true });
+        nextTrial();
+    }
+
+    function pauseTest() {
+        isRunning = false; isPaused = true;
+        document.getElementById('statusLabel').innerText = "Status: Teste Pausado";
+        updateButtonStates({ start: false, pause: false, resume: true, stop: true });
+    }
+
+    function resumeTest() {
+        isRunning = true; isPaused = false;
+        document.getElementById('statusLabel').innerText = "Status: Reversal em Execução";
+        updateButtonStates({ start: false, pause: true, resume: false, stop: true });
+    }
+
+    function stopTest() {
+        isRunning = false; isPaused = false;
+        document.getElementById('statusLabel').innerText = "Status: Teste Encerrado";
+        updateButtonStates({ start: true, pause: false, resume: false, stop: false });
+        finishTest();
+    }
+
+    function nextTrial() {
+        if (!isRunning || isPaused) return;
+        if (trialIndex >= TOTAL_TRIALS) { stopTest(); return; }
+
+        trialIndex++;
+        document.getElementById('mProgress').innerText = `${trialIndex} / ${TOTAL_TRIALS}`;
+
+        if (trialIndex === 15) correctOption = "OPTION_B"; // Inversão na metade
+
+        document.getElementById('feedbackBanner').style.display = 'none';
+        trialStartTime = performance.now();
+        mousePositions = [];
+    }
+
+    function makeChoice(selected) {
+        if (!isRunning || isPaused) return;
+
+        const rt = performance.now() - trialStartTime;
+        const jitterScore = calculateMouseJitter();
+        document.getElementById('mJitter').innerText = jitterScore;
+
+        const isReversalPhase = trialIndex >= 15;
+        const isCorrect = selected === correctOption;
+
+        const banner = document.getElementById('feedbackBanner');
+        banner.style.display = 'inline-block';
+        if (isCorrect) {
+            banner.innerText = "🎉 RECOMPENSA! (+100)";
+            banner.style.backgroundColor = "#15803d";
+        } else {
+            banner.innerText = "❌ ERRO! (-50)";
+            banner.style.backgroundColor = "#b91c1c";
+        }
+
+        fetch('/api/assessments/reversal/trial/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: activeSessionId,
+                trial_number: trialIndex,
+                selected_option: selected,
+                is_correct: isCorrect,
+                received_feedback: isCorrect ? "REWARD" : "PUNISHMENT",
+                is_reversal_phase: isReversalPhase,
+                response_time_ms: rt,
+                mouse_path_auc: jitterScore * 1.5,
+                mouse_jitter_score: jitterScore,
+                post_feedback_corrugator: 0.8,
+                heart_rate: latestHrMetrics
+            })
+        });
+
+        setTimeout(nextTrial, 1000);
+    }
+
+    function finishTest() {
+        document.getElementById('gameBox').style.display = 'none';
+        document.getElementById('startScreen').style.display = 'block';
+        document.getElementById('startScreen').innerHTML = `
+            <h2 style="color:#22c55e;">Reversal Learning Concluído!</h2>
+            <p style="color:#cbd5e1;">Métricas de plasticidade, mecânica do mouse e rPPG salvas no Rust Engine.</p>
+            <button class="btn btn-start" onclick="window.location.href='/report/?tab=reversal'">📋 Ver Resultado no Laudo</button>
+        `;
+    }
+
+    function updateButtonStates(states) {
+        document.getElementById('btnStart').disabled = !states.start;
+        document.getElementById('btnPause').disabled = !states.pause;
+        document.getElementById('btnResume').disabled = !states.resume;
+        document.getElementById('btnStop').disabled = !states.stop;
+    }
+</script>
+</body>
+</html>

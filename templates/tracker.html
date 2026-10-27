@@ -1,0 +1,257 @@
+{% extends 'assessments/base.html' %}
+
+{% block title %}NeuroSync - Rastreamento Ocular{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<style>
+    .controls-bar { display: flex; gap: 12px; margin-bottom: 25px; background: #1e293b; padding: 15px; border-radius: 8px; align-items: center; }
+    .btn { padding: 10px 20px; font-weight: 600; font-size: 14px; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+    .btn-start { background-color: #22c55e; color: #022c22; }
+    .btn-pause { background-color: #eab308; color: #422006; }
+    .btn-resume { background-color: #3b82f6; color: #172554; }
+    .btn-stop { background-color: #ef4444; color: #450a0a; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .status-text { margin-left: auto; font-weight: 600; color: #cbd5e1; }
+
+    .dashboard-grid { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
+    .metrics-panel { display: flex; flex-direction: column; gap: 15px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 15px; }
+    .card-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 8px; }
+    .card-value { font-size: 28px; font-weight: 700; color: #f8fafc; }
+    .card-subtext { font-size: 12px; color: #64748b; margin-top: 4px; }
+
+    .visualization-panel { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; }
+    #canvasContainer { width: 100%; height: 450px; background-color: #020617; border-radius: 6px; position: relative; overflow: hidden; }
+    #gazeCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    #webcamVideo { display: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<video id="webcamVideo" playsinline></video>
+
+<div class="controls-bar">
+    <button id="btnStart" class="btn btn-start" onclick="startSession()">▶ Iniciar Teste</button>
+    <button id="btnPause" class="btn btn-pause" onclick="pauseSession()" disabled>⏸ Pausar</button>
+    <button id="btnResume" class="btn btn-resume" onclick="resumeSession()" disabled>⏯ Continuar</button>
+    <button id="btnStop" class="btn btn-stop" onclick="stopSession()" disabled>⏹ Parar e Salvar</button>
+    <span id="statusLabel" class="status-text">Status: Pronto para iniciar</span>
+</div>
+
+<div class="dashboard-grid">
+    <div class="metrics-panel">
+        <div class="card">
+            <div class="card-title">Pontos Capturados</div>
+            <div id="metricTotalPoints" class="card-value">0</div>
+            <div class="card-subtext">Registros na memória local</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Lotes Salvos no Banco</div>
+            <div id="metricSavedBatches" class="card-value">0</div>
+            <div class="card-subtext">Ingestões no TimescaleDB</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Posição do Olhar (X, Y)</div>
+            <div id="metricGazePos" class="card-value" style="font-size: 20px;">0, 0</div>
+            <div class="card-subtext">Coordenadas estimadas na tela</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Taxa de Amostragem</div>
+            <div id="metricFPS" class="card-value">0 <span style="font-size: 14px;">FPS</span></div>
+            <div class="card-subtext">Frequência do MediaPipe</div>
+        </div>
+    </div>
+
+    <div class="visualization-panel">
+        <div class="card-title" style="margin-bottom: 10px;">Visualização ao Vivo da Trilha Ocular (Gaze Path)</div>
+        <div id="canvasContainer">
+            <canvas id="gazeCanvas"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    const SESSION_ID = "00000000-0000-0000-0000-000000000000";
+    let eventBuffer = [];
+    let frameCounter = 0;
+    let savedBatchesCount = 0;
+    let isTracking = false;
+    let isPaused = false;
+    let sendInterval = null;
+    let canvas, ctx, camera, faceMesh;
+    let lastFrameTime = performance.now();
+    let gazeHistory = [];
+
+    window.onload = function() {
+        canvas = document.getElementById('gazeCanvas');
+        ctx = canvas.getContext('2d');
+        syncCanvasSize();
+        window.addEventListener('resize', syncCanvasSize);
+        requestAnimationFrame(renderCanvasLoop);
+    };
+
+    function syncCanvasSize() {
+        const container = document.getElementById('canvasContainer');
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+    }
+
+    async function startSession() {
+        document.getElementById('statusLabel').innerText = "Status: Inicializando MediaPipe e Câmera...";
+        updateButtonStates({start: false, pause: false, resume: false, stop: false});
+
+        const videoElement = document.getElementById('webcamVideo');
+
+        faceMesh = new FaceMesh({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+        });
+
+        faceMesh.setOptions({
+            maxNumFaces: 1,
+            refineLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        faceMesh.onResults(onFaceMeshResults);
+
+        camera = new Camera(videoElement, {
+            onFrame: async () => {
+                if (isTracking && !isPaused) {
+                    await faceMesh.send({image: videoElement});
+                }
+            },
+            width: 640,
+            height: 480
+        });
+
+        await camera.start();
+
+        isTracking = true;
+        isPaused = false;
+        document.getElementById('statusLabel').innerText = "Status: Rastreamento Ativo";
+        updateButtonStates({start: false, pause: true, resume: false, stop: true});
+
+        sendInterval = setInterval(sendBatchToBackend, 2000);
+    }
+
+    function onFaceMeshResults(results) {
+        if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0 || isPaused) return;
+
+        const landmarks = results.multiFaceLandmarks[0];
+        const leftIris = landmarks[468];
+        const rightIris = landmarks[473];
+
+        const avgIrisX = (leftIris.x + rightIris.x) / 2;
+        const avgIrisY = (leftIris.y + rightIris.y) / 2;
+
+        const gazeX = Math.round((1 - avgIrisX) * window.innerWidth);
+        const gazeY = Math.round(avgIrisY * window.innerHeight);
+
+        frameCounter++;
+        const now = performance.now();
+        const fps = Math.round(1000 / (now - lastFrameTime)) || 30;
+        lastFrameTime = now;
+
+        eventBuffer.push({
+            "time": new Date().toISOString(),
+            "session": SESSION_ID,
+            "frame_number": frameCounter,
+            "gaze_x": gazeX,
+            "gaze_y": gazeY,
+            "confidence": 1.0
+        });
+
+        const canvasX = (gazeX / window.innerWidth) * canvas.width;
+        const canvasY = (gazeY / window.innerHeight) * canvas.height;
+
+        gazeHistory.push({ x: canvasX, y: canvasY });
+        if (gazeHistory.length > 40) gazeHistory.shift();
+
+        document.getElementById('metricTotalPoints').innerText = frameCounter;
+        document.getElementById('metricGazePos').innerText = `${gazeX}, ${gazeY}`;
+        document.getElementById('metricFPS').innerText = fps;
+    }
+
+    function renderCanvasLoop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (gazeHistory.length > 1) {
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+            ctx.lineWidth = 3;
+            ctx.moveTo(gazeHistory[0].x, gazeHistory[0].y);
+
+            for (let i = 1; i < gazeHistory.length; i++) {
+                ctx.lineTo(gazeHistory[i].x, gazeHistory[i].y);
+            }
+            ctx.stroke();
+
+            for (let i = 0; i < gazeHistory.length; i++) {
+                const alpha = (i + 1) / gazeHistory.length;
+                ctx.fillStyle = `rgba(56, 189, 248, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(gazeHistory[i].x, gazeHistory[i].y, 5 + (alpha * 4), 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        requestAnimationFrame(renderCanvasLoop);
+    }
+
+    function pauseSession() {
+        if (!isTracking) return;
+        isPaused = true;
+        document.getElementById('statusLabel').innerText = "Status: Teste Pausado";
+        updateButtonStates({start: false, pause: false, resume: true, stop: true});
+    }
+
+    function resumeSession() {
+        if (!isTracking) return;
+        isPaused = false;
+        document.getElementById('statusLabel').innerText = "Status: Rastreamento Ativo";
+        updateButtonStates({start: false, pause: true, resume: false, stop: true});
+    }
+
+    function stopSession() {
+        isTracking = false;
+        isPaused = false;
+        clearInterval(sendInterval);
+        if (camera) camera.stop();
+        sendBatchToBackend();
+        document.getElementById('statusLabel').innerText = "Status: Teste Finalizado e Salvo";
+        updateButtonStates({start: true, pause: false, resume: false, stop: false});
+    }
+
+    function updateButtonStates(states) {
+        document.getElementById('btnStart').disabled = !states.start;
+        document.getElementById('btnPause').disabled = !states.pause;
+        document.getElementById('btnResume').disabled = !states.resume;
+        document.getElementById('btnStop').disabled = !states.stop;
+    }
+
+    function sendBatchToBackend() {
+        if (eventBuffer.length === 0) return;
+
+        const currentBatch = [...eventBuffer];
+        eventBuffer = [];
+
+        fetch('/api/assessments/events/ingest/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                "session_id": SESSION_ID,
+                "events": currentBatch
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            savedBatchesCount++;
+            document.getElementById('metricSavedBatches').innerText = savedBatchesCount;
+        })
+        .catch((error) => console.error('Erro ao enviar lote:', error));
+    }
+</script>
+{% endblock %}
