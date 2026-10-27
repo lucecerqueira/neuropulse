@@ -1,0 +1,4 @@
+
+[[tools.copy-file]]
+src = "favicon.ico"
+target = "favicon.ico"

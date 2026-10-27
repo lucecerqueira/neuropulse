@@ -40,8 +40,8 @@ pub fn LoginView(
         <div class="min-h-screen bg-[#060911] flex items-center justify-center p-4 font-mono">
             <div class="w-full max-w-md bg-[#0f172a]/90 border border-slate-800 p-8 rounded-2xl shadow-2xl space-y-6">
                 <div class="flex justify-center">
-                    <div class="w-14 h-14 bg-cyan-500/10 border border-cyan-500/30 rounded-full flex items-center justify-center text-cyan-400 font-bold text-lg">
-                        "NP"
+                    <div class="w-16 h-16 bg-cyan-500/10 border border-cyan-500/30 rounded-2xl flex items-center justify-center p-3 shadow-lg shadow-cyan-500/10">
+                        <img src="/favicon.svg" alt="NeuroPulse Logo" class="w-full h-full object-contain" />
                     </div>
                 </div>
 

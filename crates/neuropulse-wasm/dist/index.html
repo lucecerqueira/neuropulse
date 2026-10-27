@@ -3,8 +3,9 @@
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>NeuroPulse Dashboard</title>
+    <title>NeuroPulse</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="shortcut icon" href="/favicon.ico"/>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -20,12 +21,12 @@
       }
     </script>
     
-<link rel="modulepreload" href="/neuropulse-wasm-97751d079a992608.js" crossorigin="anonymous" integrity="sha384-vCF+tGavrZjRSa+dPawW5hGp3jeKoVG5jsA33BsAaWcglth72cDHnhwBgIPaB0lk"><link rel="preload" href="/neuropulse-wasm-62015f4cf1ae890b_bg.wasm" crossorigin="anonymous" integrity="sha384-aBkM5+wlJ3Wxax86GZ5wot75ZRSY+VfBHkJEAVuFy6F0ZTt0ydCQSGY5vMmIVl40" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/neuropulse-wasm-994f8a8623b423b9.js" crossorigin="anonymous" integrity="sha384-3rzu3YG3c3Imd0qznNuIgjXRMw1Zf7Mdtu8IpMO6bCJm6utyIYwoBP/le+80sY0O"><link rel="preload" href="/neuropulse-wasm-ff753ee19931e75_bg.wasm" crossorigin="anonymous" integrity="sha384-XOMojZzXuQum8Ccv0Av3eCt6wDRK2XTAteZjOGFx0KmwKiruMPeCzpUFQQ0XqhXi" as="fetch" type="application/wasm"></head>
 <body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen">
 
 <script type="module">
-import init, * as bindings from '/neuropulse-wasm-97751d079a992608.js';
-const wasm = await init({ module_or_path: '/neuropulse-wasm-62015f4cf1ae890b_bg.wasm' });
+import init, * as bindings from '/neuropulse-wasm-994f8a8623b423b9.js';
+const wasm = await init({ module_or_path: '/neuropulse-wasm-ff753ee19931e75_bg.wasm' });
 
 
 window.wasmBindings = bindings;
